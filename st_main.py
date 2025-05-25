@@ -33,7 +33,7 @@ if 'show_add_user_form' not in st.session_state:
 # --- User Input Section ---
 st.sidebar.header("Student Lookup")
 first_name_input = st.sidebar.text_input(
-    "Enter Student's First Name:", 
+    "Enter your username:", 
     value=st.session_state.first_name,
     key="first_name_key" # Using a key helps Streamlit manage the widget
 ).strip()
@@ -43,7 +43,7 @@ fetch_button = st.sidebar.button("🔍 Fetch Data", type="primary")
 st.sidebar.markdown("---") # Separator
 
 # --- Add New User Section (in sidebar) ---
-if st.sidebar.button("➕ Add New Student"):
+if st.sidebar.button("➕ Register New Student"):
     st.session_state.show_add_user_form = not st.session_state.show_add_user_form # Toggle form visibility
 
 if st.session_state.show_add_user_form:

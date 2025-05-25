@@ -10,7 +10,7 @@ def run_application():
     # --- Ensure DB table exists ---
     db_utils.create_db_and_table_pg() 
 
-    first_name_input = input("Enter the first name of the student: ").strip()
+    first_name_input = input("Enter your username: ").strip()
     if not first_name_input:
         print("No first name entered. Exiting.")
         return
