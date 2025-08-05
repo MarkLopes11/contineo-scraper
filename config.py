@@ -39,5 +39,13 @@ SUBJECT_CODE_TO_NAME_MAP = {
     "CSL604": "AI Lab",
     "CSL605": "Skill-Based Lab",
     "CSM601": "Mini Project 2B",
-    "CSDL06013": "QA (Quantitative Analysis)"
+    "CSDL06013": "QA (Quantitative Analysis)",
+    "CSC702" : "BDA",
+    "CSC701" : "ML",
+    "CSDC7013" : "NLP",
+    "CSDC7023" : "IR",
+    "CSL701" : "ML LAB",
+    "CSL702" : "BDA LAB",
+    "CSDL7013" : "NLP LAB",
+    "CSDL7023" : "IR LAB"
 }
