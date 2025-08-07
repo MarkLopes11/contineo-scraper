@@ -47,5 +47,7 @@ SUBJECT_CODE_TO_NAME_MAP = {
     "CSL701" : "ML LAB",
     "CSL702" : "BDA LAB",
     "CSDL7013" : "NLP LAB",
-    "CSDL7023" : "IR LAB"
+    "CSDL7023" : "IR LAB",
+    "CSDC7022" : "Blockchain",
+    "CSDL7022" : "Blockchain Lab"
 }
