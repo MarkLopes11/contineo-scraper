@@ -53,7 +53,7 @@ if st.session_state.show_add_user_form:
         with st.form("new_user_form"):
             st.markdown("##### Enter New Student Details:")
             new_first_name = st.text_input("username (for lookup, e.g., gamer709):", key="add_first_name").strip()
-            new_full_name = st.text_input("Full Name (exactly as you see on the original contieno site after you log in):", key="add_full_name").strip()
+            new_full_name = st.text_input("Full Name (exactly as you see on the original contineo site after you log in):", key="add_full_name").strip()
             new_prn = st.text_input("PRN:", key="add_prn").strip()
             new_dob_day = st.text_input("DOB - Date (01-31):", key="add_dob_day").strip()
             new_dob_month = st.text_input("DOB - Month (01-12):", key="add_dob_month").strip()
