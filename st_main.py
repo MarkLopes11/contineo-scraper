@@ -110,7 +110,7 @@ if fetch_button and first_name_input:
                     if attendance_records:
                         attendance_display_data = []
                         for record in attendance_records:
-                            subject_code = record['subject']
+                            subject_code = record['subject'].strip()
                             if subject_code == "CSM601": 
                                 continue 
                             subject_name = config.SUBJECT_CODE_TO_NAME_MAP.get(subject_code, subject_code) 
