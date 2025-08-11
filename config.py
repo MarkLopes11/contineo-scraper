@@ -49,5 +49,13 @@ SUBJECT_CODE_TO_NAME_MAP = {
     "CSDL7013" : "NLP LAB",
     "CSDL7023" : "IR LAB",
     "CSDC7022" : "Blockchain",
-    "CSDL7022" : "Blockchain Lab"
+    "CSDL7022" : "Blockchain Lab",
+    "MEC702" : "Logistics & Supply Chain Management",
+    "MEC701" : "Design of Mechanical system",
+    "MEL701" : "Design of Mechanical system lab",
+    "MEL702" : "Maintainence Engineering",
+    "MEL703" : "Industrial Skills",
+    "MEDLO7032" : "Renewable Energy System",
+    "MEDLO7041" : "Machinery Diagnostics",
+    "ILO7017" : "Disaster Management and Mitigation Measures"
 }
