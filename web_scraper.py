@@ -54,11 +54,11 @@ def login_and_get_welcome_page(prn, dob_day, dob_month_val, dob_year, user_full_
         # print(f"POST request completed. Status: {response_post.status_code}")
         # print(f"Current URL after POST: {response_post.url}")
         welcome_page_html = response_post.text
-        login_successful = True
-        #if user_full_name_for_check.lower() in welcome_page_html.lower():
+        login_successful = False
+        if user_full_name_for_check.lower() in welcome_page_html.lower():
             print(f"Login successful! Welcome {user_full_name_for_check}.")
-            #login_successful = True
-        if "id=\"gaugeTypeMulti\"" in welcome_page_html: 
+            login_successful = True
+        elif "id=\"gaugeTypeMulti\"" in welcome_page_html: 
             print(f"Login successful (found attendance chart)! Welcome {user_full_name_for_check}.")
             login_successful = True
         elif "id=\"stackedBarChart_1\"" in welcome_page_html: 
