@@ -185,10 +185,10 @@ if should_fetch:
                     if attendance_records:
                         attendance_display_data = []
                         for record in attendance_records:
-                            subject_code = record['subject']
-                            if subject_code == "CSM601":
-                                continue
-                            subject_name = config.SUBJECT_CODE_TO_NAME_MAP.get(subject_code, subject_code)
+                            subject_code = record['subject'].strip()
+                            if subject_code == "CSM601": 
+                                continue 
+                            subject_name = config.SUBJECT_CODE_TO_NAME_MAP.get(subject_code, subject_code) 
                             attendance_display_data.append({
                                 "Subject": f"{subject_name} ({subject_code})",
                                 "Percentage": f"{record['percentage']}%"
