@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 from streamlit_local_storage import LocalStorage
 from datetime import datetime
+import pytz
 
 _localS = LocalStorage()
 
@@ -42,7 +43,7 @@ def get_processed_student_data(prn, dob_day, dob_month, dob_year, full_name):
             "attendance": attendance_records,
             "cie_marks": cie_marks_records
         },
-        "scraped_at": datetime.now()
+        "scraped_at": datetime.now(pytz.utc)
     }
 
 # --- Initialize DB Table (runs once per app session if needed) ---
@@ -169,10 +170,17 @@ if should_fetch:
             )
 
             if result:
-                scraped_time = result["scraped_at"]
+                scraped_time_utc = result["scraped_at"]
+
+                # Define your local timezone
+                local_tz = pytz.timezone('Asia/Kolkata') # e.g., for India Standard Time
+                
+                # Convert the stored UTC time to your local timezone
+                scraped_time_local = scraped_time_utc.astimezone(local_tz)
+
                 st.success("Login and data processing successful!")
                 
-                st.caption(f"Data fetched from portal at: {scraped_time.strftime('%I:%M:%S %p, %d-%b-%Y')}")
+                st.caption(f"Data fetched from portal at: {scraped_time_local.strftime('%I:%M:%S %p, %d-%b-%Y')}")
 
                 processed_data = result["data"]
                 attendance_records = processed_data["attendance"]
