@@ -9,7 +9,7 @@ if NEON_DB_PASSWORD is None:
     sys.exit("Database password not configured. Exiting.")
 
 # Construct the connection string using the (hopefully) loaded password
-PG_HOST = os.environ.get("PG_HOST", "ep-spring-voice-a1yre8if-pooler.ap-southeast-1.aws.neon.tech")
+PG_HOST = os.environ.get("NEON_DB_URI", "ep-spring-voice-a1yre8if-pooler.ap-southeast-1.aws.neon.tech")
 PG_DBNAME = os.environ.get("PG_DBNAME", "neondb")
 PG_USER = os.environ.get("PG_USER", "neondb_owner")
 
