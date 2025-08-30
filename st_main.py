@@ -229,9 +229,9 @@ if should_fetch:
                                 # --- Display Current User's Marks ---
                                 st.markdown("**Your Marks:**")
                                 exam_types_to_show = []
-                                if subject_code.startswith("CSC") or subject_code.startswith("CSD"):
+                                if subject_code.startswith("CSC") or subject_code.startswith("CSDC"):
                                     exam_types_to_show = ["MSE", "TH-ISE1", "TH-ISE2", "ESE"]
-                                elif subject_code.startswith("CSL"):
+                                elif subject_code.startswith("CSL") or subject_code.startswith("CSDL"):
                                     exam_types_to_show = ["PR-ISE1", "PR-ISE2"]
                                 
                                 subject_total = 0.0
