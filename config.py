@@ -57,5 +57,6 @@ SUBJECT_CODE_TO_NAME_MAP = {
     "MEL703" : "Industrial Skills",
     "MEDLO7032" : "Renewable Energy System",
     "MEDLO7041" : "Machinery Diagnostics",
-    "ILO7017" : "Disaster Management and Mitigation Measures"
+    "ILO7017" : "Disaster Management and Mitigation Measures",
+    "CSP701" : "Major Project"
 }

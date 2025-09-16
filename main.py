@@ -82,9 +82,9 @@ def run_application():
                 print(f"Subject: {subject_name} ({subject_code})")
                 
                 exam_types_to_show = []
-                if subject_code.startswith("CSC") or subject_code.startswith("CSD"): 
+                if subject_code.startswith("CSC") or subject_code.startswith("CSDC"): 
                     exam_types_to_show = ["MSE", "TH-ISE1", "TH-ISE2", "ESE"]
-                elif subject_code.startswith("CSL"): 
+                elif subject_code.startswith("CSL") or subject_code.startswith("CSDL"): 
                     exam_types_to_show = ["PR-ISE1", "PR-ISE2"]
                 elif subject_code == "CSM601": 
                     pass # No specific filter for Mini Project, shows all if exam_types_to_show remains empty
