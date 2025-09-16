@@ -58,5 +58,23 @@ SUBJECT_CODE_TO_NAME_MAP = {
     "MEDLO7032" : "Renewable Energy System",
     "MEDLO7041" : "Machinery Diagnostics",
     "ILO7017" : "Disaster Management and Mitigation Measures",
-    "CSP701" : "Major Project"
+    "CSP701" : "Major Project",
+    "25PCC13CE11" : "Computer Network",
+    "25PCC13CE12" : "TCS",
+    "25PCC13CE13" : "OS",
+    "25PCC13CE14" : "DWM",
+    "25PEC13CE16" : "HMI",
+    "25MDM42" : "Emotional And Spiritual Intelligence",
+    "25PECL13CE14" : "Innovative Product Development Lab Phase 1",
+    "25OE13CE43" : "SUpply Chain Management",
+    "25BSC12CE05" : "DSGT",
+    "25PCC12CE05" : "COA",
+    "25PCC12CE06" : "Data Structures",
+    "25PCC12CE07" : "Object Oriented Programming",
+    "25VEC12CE01" : "Human Values And Professional Ethics",
+    "25AEC12CE021" : "Sanskrit",
+    "25MDMBM1" : "Financial Accounting",
+    "25OE13CE12" : "Financial Planning Taxation And Investment",
+    "25MDMBM2" : "Economics For Businees"
+
 }
