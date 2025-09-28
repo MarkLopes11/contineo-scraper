@@ -1,5 +1,3 @@
-# st_main.py
-
 import streamlit as st
 import os
 from dotenv import load_dotenv
@@ -101,7 +99,7 @@ with col1:
 with col2:
     force_refresh_button = st.button("🔄 Get Live Data", use_container_width=True)
 
-st.sidebar.markdown("---") 
+st.sidebar.markdown("---")
 
 # --- Add New User Section (in sidebar) ---
 if st.sidebar.button("➕ Register New Student"):
@@ -113,23 +111,39 @@ if st.session_state.show_add_user_form:
             st.markdown("##### Enter New Student Details:")
             new_first_name = st.text_input("Username (for lookup, e.g., 'gamer709'):", key="add_first_name").strip()
             new_full_name = st.text_input("Full Name (exactly as on the portal):", key="add_full_name").strip()
-            new_prn = st.text_input("PRN(Or Roll No if you use that to login):", key="add_prn").strip()
+            new_prn = st.text_input("PRN(Or Roll No, if you use that to login):", key="add_prn").strip()
             new_dob_day = st.text_input("DOB - Date (e.g., 01, 23):", key="add_dob_day").strip()
             new_dob_month = st.text_input("DOB - Month (e.g., 01, 12):", key="add_dob_month").strip()
             new_dob_year = st.text_input("DOB - Year (e.g., 2005):", key="add_dob_year").strip()
 
-            submitted_add_user = st.form_submit_button("💾 Save Student")
+            submitted_add_user = st.form_submit_button("💾 Validate & Save Student")
 
             if submitted_add_user:
+                # Step 1: Basic check for empty fields
                 if not all([new_first_name, new_full_name, new_prn, new_dob_day, new_dob_month, new_dob_year]):
                     st.error("All fields are required to add a new student.")
                 else:
-                    if db_utils.add_user_to_db_pg(new_first_name, new_full_name, new_prn, new_dob_day, new_dob_month, new_dob_year):
-                        st.success(f"Student '{new_full_name}' added successfully! You can now look them up.")
-                        st.session_state.show_add_user_form = False
-                        st.rerun()
+                    # Step 2: Attempt a live login to validate credentials
+                    with st.spinner("Validating credentials with the student portal..."):
+                        # We use the web scraper to test the login. We only need the html part.
+                        _, validation_html = web_scraper.login_and_get_welcome_page(
+                            new_prn, new_dob_day, new_dob_month, new_dob_year, new_full_name
+                        )
+
+                    # Step 3: Check the result of the validation attempt
+                    if validation_html:
+                        st.info("Validation successful! Saving student details...")
+                        if db_utils.add_user_to_db_pg(new_first_name, new_full_name, new_prn, new_dob_day, new_dob_month, new_dob_year):
+                            st.success(f"Student '{new_full_name}' added successfully! You can now look them up.")
+                            st.session_state.show_add_user_form = False
+                            st.rerun() # Rerun to close the form and refresh state
+                        else:
+                            # This case handles if validation passed but DB save failed (e.g., username already exists)
+                            st.error("Credentials are valid, but failed to save. The username or PRN might already exist in our database.")
                     else:
-                        st.error("Failed to add student. The username or PRN might already exist.")
+                        # The user's input will remain in the text boxes for them to correct.
+                        st.error("Login validation failed. Please double-check your Full Name, PRN, and DOB. They must match the portal exactly.")
+
 
 # --- DATA FETCH TRIGGER LOGIC ---
 should_fetch = False
