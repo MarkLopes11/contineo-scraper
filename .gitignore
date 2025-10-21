@@ -4,3 +4,6 @@
 cie_marks.csv
 users.csv
 /test
+*.iml
+*.xml
+.idea/
