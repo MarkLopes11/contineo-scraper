@@ -75,6 +75,14 @@ SUBJECT_CODE_TO_NAME_MAP = {
     "25AEC12CE021" : "Sanskrit",
     "25MDMBM1" : "Financial Accounting",
     "25OE13CE12" : "Financial Planning Taxation And Investment",
-    "25MDMBM2" : "Economics For Businees"
-
+    "25MDMBM2" : "Economics For Businees",
+    # -- added new subjects --
+    "25BSC12ME05" : "STPDE",
+    "25PCC12ME05" : "AMP",
+    "25PCC12ME06" : "Mechanics",
+    "25PCC12ME07" : "MSP",
+    "25VEC12ME01" : "Human Values And Professional Ethics",
+    "250E12" : "FPTI",
+    "25AEC12ME023" : "Kannada",
+    "25DM61" : "Statistics for Data Science"
 }
