@@ -1,3 +1,13 @@
-To log into contineo we need to input our prn, dob which is annoying when you have to do it everytime.
-So here you basically register with your prn and dob once along with a username(that you will use to get your data).
-After registering you just have to enter the username and your prn and dob will automatically be filled in the actual contineo site and the results will be displayed here(attendance and marks).
+# Contineo Scraper
+
+Contineo requires the input of PRN (or roll number) and DoB on every login, which can be inconvenient.
+
+This application allows the user to register once with their **_PRN_** (or **_roll number_**), **_DoB_**, and a **_username_**.
+
+After registration, the user **only** needs to enter the **_username_** to automatically fill in their PRN and DoB on the Contineo
+site, making it easier to access the attendance and marks.
+
+## Features
+- Register with PRN, DoB, and a username.
+- Retrieve attendance and marks using just the username.
+- Shows the **_number of lectures to attend_** more to reach the _75% attendance threshold_.
