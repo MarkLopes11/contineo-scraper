@@ -227,7 +227,7 @@ if st.session_state.student_data_result:
                         continue
                     subject_name = config.SUBJECT_CODE_TO_NAME_MAP.get(subject_code, subject_code)
 
-                    # -- logic for meeting attendance requirement --
+                    # -- added logic for meeting attendance requirement --
                     to_sit = 0
                     if record['percentage'] < 75:
                         attended_lects = record['percentage'] * 28 / 100  # assumes 28 lectures in total (calculated avg)
