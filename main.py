@@ -1,10 +1,11 @@
 # main_app.py
 import os
 from dotenv import load_dotenv
-load_dotenv()
 import db_utils
 import web_scraper
-import config 
+import config
+
+load_dotenv()
 
 def run_application():
     # --- Ensure DB table exists ---

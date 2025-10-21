@@ -226,9 +226,20 @@ if st.session_state.student_data_result:
                     if subject_code == "CSM601":
                         continue
                     subject_name = config.SUBJECT_CODE_TO_NAME_MAP.get(subject_code, subject_code)
+
+                    # [Added by contributor RageCoder2006 - to-attend logic, Oct 2025]
+                    # added as a small enhancement, does NOT interact with the database
+                    # -- computes lectures required to reach 75% attendance --
+                    to_sit = 0
+                    if record['percentage'] < 75:
+                        attended_lects = record['percentage'] * 32 / 100  # assumes 32 lectures in total (calculated avg)
+                        attended_lects = int(attended_lects) # flooring the float so that attended lects is int
+                        if attended_lects < 24:
+                            to_sit = 24 - attended_lects # calculating to sit lects to reach 75%
                     attendance_display_data.append({
                         "Subject": f"{subject_name} ({subject_code})",
-                        "Percentage": f"{record['percentage']}%"
+                        "Percentage": f"{record['percentage']}%",
+                        "To Sit (approx for 75%)": f"{to_sit}",
                     })
                 if attendance_display_data:
                     st.table(attendance_display_data)
