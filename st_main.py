@@ -230,14 +230,14 @@ if st.session_state.student_data_result:
                     # -- added logic for meeting attendance requirement --
                     to_sit = 0
                     if record['percentage'] < 75:
-                        attended_lects = record['percentage'] * 28 / 100  # assumes 28 lectures in total (calculated avg)
+                        attended_lects = record['percentage'] * 32 / 100  # assumes 32 lectures in total (calculated avg)
                         attended_lects = int(attended_lects) # flooring the float so that attended lects is int
-                        if attended_lects < 21:
-                            to_sit = 21 - attended_lects # calculating to sit lects to reach 75%
+                        if attended_lects < 24:
+                            to_sit = 24 - attended_lects # calculating to sit lects to reach 75%
                     attendance_display_data.append({
                         "Subject": f"{subject_name} ({subject_code})",
                         "Percentage": f"{record['percentage']}%",
-                        "To Sit (for 75)": f"{to_sit}",
+                        "To Sit (approx for 75%)": f"{to_sit}",
                     })
                 if attendance_display_data:
                     st.table(attendance_display_data)
