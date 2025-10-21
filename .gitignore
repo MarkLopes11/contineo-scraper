@@ -6,3 +6,4 @@ users.csv
 /test
 *.iml
 *.xml
+.idea/
