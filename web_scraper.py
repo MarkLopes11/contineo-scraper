@@ -172,3 +172,65 @@ def extract_cie_marks(welcome_page_html):
         print("\nCould not find or parse the CIE marks data from any script tag.")
         return None
     return cie_data
+
+def extract_detailed_attendance_info(session, welcome_page_html):
+    """
+    Parses the welcome page to find links to detailed attendance pages,
+    scrapes each of those pages, and returns detailed attendance counts.
+    """
+    if not welcome_page_html or not session:
+        return {}
+
+    soup = BeautifulSoup(welcome_page_html, "html.parser")
+    detailed_data = {}
+    
+    # Find the main table containing links to subject details
+    table = soup.find("table", class_="dash_even_row")
+    if not table:
+        print("Could not find the main course registration table for detailed attendance.")
+        return {}
+        
+    for row in table.tbody.find_all("tr"):
+        try:
+            cells = row.find_all("td")
+            if not cells: continue
+            
+            subject_code = cells[0].text.strip()
+            # Find the specific link for the attendance page
+            attendance_link_tag = row.find("a", href=re.compile(r"task=attendencelist"))
+
+            if not attendance_link_tag:
+                continue
+
+            # Construct the full URL and fetch the page
+            absolute_url = urljoin(config.LOGIN_URL, attendance_link_tag['href'])
+            response_detail = session.get(absolute_url, timeout=20)
+            response_detail.raise_for_status()
+            soup_detail = BeautifulSoup(response_detail.content, "html.parser")
+            
+            # Find the spans containing the numbers
+            present_text = soup_detail.find("span", class_="cn-color-green").text if soup_detail.find("span", class_="cn-color-green") else ""
+            absent_text = soup_detail.find("span", class_="cn-color-red").text if soup_detail.find("span", class_="cn-color-red") else ""
+            remaining_text = soup_detail.find("span", class_="cn-color-grey").text if soup_detail.find("span", class_="cn-color-grey") else ""
+
+            # Extract numbers using regex
+            present_match = re.search(r'\[(\d+)\]', present_text)
+            absent_match = re.search(r'\[(\d+)\]', absent_text)
+            remaining_match = re.search(r'\[(\d+)\]', remaining_text)
+            
+            attended = int(present_match.group(1)) if present_match else 0
+            missed = int(absent_match.group(1)) if absent_match else 0
+            remaining = int(remaining_match.group(1)) if remaining_match else 0
+            
+            detailed_data[subject_code] = {
+                'attended': attended,
+                'conducted': attended + missed,
+                'remaining': remaining
+            }
+        except Exception as e:
+            subject_code_for_error = cells[0].text.strip() if 'cells' in locals() and cells else "Unknown Subject"
+            print(f"Error scraping detailed attendance for {subject_code_for_error}: {e}")
+            continue
+            
+    print(f"Successfully scraped detailed attendance for {len(detailed_data)} subjects.")
+    return detailed_data
