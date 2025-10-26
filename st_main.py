@@ -178,40 +178,30 @@ if st.session_state.student_data_result:
             if attendance_records:
                 attendance_display_data = []
                 for record in attendance_records:
-                    subject_code = record['subject'].strip()
+                    # --- THIS IS THE CRITICAL FIX ---
+                    # Strip the subject code to ensure a clean match
+                    subject_code = record['subject'].strip() 
+                    
                     if subject_code == "CSM601": continue
                     
                     subject_name = config.SUBJECT_CODE_TO_NAME_MAP.get(subject_code, subject_code)
-                    
-                    # Get the current percentage from the summary data first
-                    current_percentage = 0
-                    if record.get('percentage') is not None:
-                        current_percentage = record['percentage']
+                    current_percentage = record.get('percentage', 0)
                     
                     required_str = "N/A"
+                    # The rest of the logic can now correctly find the key
                     if detailed_attendance_records and subject_code in detailed_attendance_records:
                         details = detailed_attendance_records[subject_code]
                         attended = details.get('attended', 0)
                         conducted = details.get('conducted', 0)
 
                         if conducted > 0:
-                            # Recalculate percentage based on detailed numbers for accuracy
                             actual_percentage = (attended / conducted) * 100
-                            
-                            # --- NEW CALCULATION LOGIC STARTS HERE ---
                             if actual_percentage >= 75:
-                                # Calculate how many lectures can be missed
-                                # Formula: x <= (attended / 0.75) - conducted
                                 can_miss = math.floor((attended / 0.75) - conducted)
-                                can_miss = max(0, can_miss) # Ensure it's not negative
-                                required_str = f"✅ Can miss {can_miss} {'lecture' if can_miss == 1 else 'lectures'}"
+                                required_str = f"✅ Can miss {max(0, can_miss)} {'lecture' if max(0, can_miss) == 1 else 'lectures'}"
                             else:
-                                # Calculate how many lectures must be attended
-                                # Formula: y >= (0.75 * conducted - attended) / 0.25
                                 needed = math.ceil(((0.75 * conducted) - attended) / 0.25)
-                                needed = max(0, needed) # Ensure it's not negative
-                                required_str = f"Must attend {needed} {'lecture' if needed == 1 else 'lectures'}"
-                            # --- NEW CALCULATION LOGIC ENDS HERE ---
+                                required_str = f"Must attend {max(0, needed)} {'lecture' if max(0, needed) == 1 else 'lectures'}"
                         else:
                             required_str = "No classes held"
 
@@ -222,7 +212,6 @@ if st.session_state.student_data_result:
                     })
                 
                 if attendance_display_data:
-                    # Renamed column for clarity
                     st.dataframe(
                         attendance_display_data, 
                         use_container_width=True, 
@@ -242,9 +231,9 @@ if st.session_state.student_data_result:
                     with st.expander(f"{subject_name} ({subject_code})", expanded=False):
                         st.markdown("**Your Marks:**")
                         exam_types_to_show = []
-                        if subject_code.startswith(("CSC", "CSDC")):
+                        if subject_code.startswith(("CSC", "CSDC", "MEC", "MEDLO", "ILO")):
                             exam_types_to_show = ["MSE", "TH-ISE1", "TH-ISE2", "ESE"]
-                        elif subject_code.startswith(("CSL", "CSDL")):
+                        elif subject_code.startswith(("CSL", "CSDL", "MEL", "MEP")):
                             exam_types_to_show = ["PR-ISE1", "PR-ISE2"]
 
                         subject_total, has_valid_marks = 0.0, False
@@ -253,7 +242,7 @@ if st.session_state.student_data_result:
 
                         for exam_type in defined_order:
                             if exam_type in marks_dict and (not exam_types_to_show or exam_type in exam_types_to_show):
-                                mark = marks_dict[exam_type]
+                                mark = marks_dict.get(exam_type)
                                 temp_marks_to_print[exam_type] = mark
                                 if isinstance(mark, (int, float)):
                                     subject_total += mark

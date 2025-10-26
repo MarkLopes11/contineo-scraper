@@ -175,8 +175,8 @@ def extract_cie_marks(welcome_page_html):
 
 def extract_detailed_attendance_info(session, welcome_page_html):
     """
-    Parses the welcome page to find links to detailed attendance pages,
-    scrapes each of those pages, and returns detailed attendance counts.
+    Parses the welcome page to find links to detailed attendance pages.
+    This version handles THREE layouts and returns a DICTIONARY to match the old app structure.
     """
     if not welcome_page_html or not session:
         return {}
@@ -184,53 +184,71 @@ def extract_detailed_attendance_info(session, welcome_page_html):
     soup = BeautifulSoup(welcome_page_html, "html.parser")
     detailed_data = {}
     
-    # Find the main table containing links to subject details
-    table = soup.find("table", class_="dash_even_row")
-    if not table:
-        print("Could not find the main course registration table for detailed attendance.")
-        return {}
-        
-    for row in table.tbody.find_all("tr"):
-        try:
-            cells = row.find_all("td")
-            if not cells: continue
+    # List of potential identifiers for the main subjects table.
+    potential_table_identifiers = [
+        {"class": "dash_even_row"},  # Your class's layout
+        {"class": "dash_od_row"},    # Luke's class's layout
+    ]
+    
+    table = None
+    for identifier in potential_table_identifiers:
+        found_table = soup.find("table", identifier)
+        if found_table and found_table.tbody and len(found_table.tbody.find_all("tr")) > 0:
+            print(f"Scraping Strategy: Found table-based layout using identifier: {identifier}")
+            table = found_table
+            break
             
-            subject_code = cells[0].text.strip()
-            # Find the specific link for the attendance page
-            attendance_link_tag = row.find("a", href=re.compile(r"task=attendencelist"))
+    # STRATEGY 1: If we found a table
+    if table:
+        for row in table.tbody.find_all("tr"):
+            try:
+                cells = row.find_all("td")
+                if len(cells) < 2: continue
+                
+                subject_code = cells[0].text.strip() # Strip whitespace
+                link_tag = row.find("a", href=re.compile(r"task=attendencelist"))
+                
+                if link_tag and subject_code:
+                    details = _scrape_attendance_detail_page(session, link_tag['href'])
+                    detailed_data[subject_code] = details
+                    
+            except Exception as e:
+                print(f"Error scraping a row in table layout: {e}")
+        return detailed_data
 
-            if not attendance_link_tag:
-                continue
+    # STRATEGY 2: If no table was found, try the Tab-Based Layout
+    tab_container = soup.find("ul", attrs={"uk-tab": ""})
+    if tab_container:
+        print("Scraping Strategy: Found tab-based layout.")
+        for tab in tab_container.find_all("li"):
+            try:
+                link_tag = tab.find("a")
+                if not link_tag: continue
+                
+                subject_code = link_tag.text.strip() # Strip whitespace
+                
+                if link_tag.has_attr('href') and subject_code:
+                    details = _scrape_attendance_detail_page(session, link_tag['href'])
+                    detailed_data[subject_code] = details
+                    
+            except Exception as e:
+                print(f"Error scraping a tab in tabbed layout: {e}")
+        return detailed_data
 
-            # Construct the full URL and fetch the page
-            absolute_url = urljoin(config.LOGIN_URL, attendance_link_tag['href'])
-            response_detail = session.get(absolute_url, timeout=20)
-            response_detail.raise_for_status()
-            soup_detail = BeautifulSoup(response_detail.content, "html.parser")
-            
-            # Find the spans containing the numbers
-            present_text = soup_detail.find("span", class_="cn-color-green").text if soup_detail.find("span", class_="cn-color-green") else ""
-            absent_text = soup_detail.find("span", class_="cn-color-red").text if soup_detail.find("span", class_="cn-color-red") else ""
-            remaining_text = soup_detail.find("span", class_="cn-color-grey").text if soup_detail.find("span", class_="cn-color-grey") else ""
+    print("CRITICAL: Could not find attendance data using any known layout.")
+    return {}
 
-            # Extract numbers using regex
-            present_match = re.search(r'\[(\d+)\]', present_text)
-            absent_match = re.search(r'\[(\d+)\]', absent_text)
-            remaining_match = re.search(r'\[(\d+)\]', remaining_text)
-            
-            attended = int(present_match.group(1)) if present_match else 0
-            missed = int(absent_match.group(1)) if absent_match else 0
-            remaining = int(remaining_match.group(1)) if remaining_match else 0
-            
-            detailed_data[subject_code] = {
-                'attended': attended,
-                'conducted': attended + missed,
-                'remaining': remaining
-            }
-        except Exception as e:
-            subject_code_for_error = cells[0].text.strip() if 'cells' in locals() and cells else "Unknown Subject"
-            print(f"Error scraping detailed attendance for {subject_code_for_error}: {e}")
-            continue
-            
-    print(f"Successfully scraped detailed attendance for {len(detailed_data)} subjects.")
-    return detailed_data
+def _scrape_attendance_detail_page(session, url):
+    """ Helper function to visit a detail page and extract Present/Absent numbers. """
+    try:
+        response = session.get(urljoin(config.LOGIN_URL, url), timeout=30)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, "html.parser")
+        present_text = soup.find("span", class_="cn-color-green").text if soup.find("span", class_="cn-color-green") else ""
+        absent_text = soup.find("span", class_="cn-color-red").text if soup.find("span", class_="cn-color-red") else ""
+        present = int(re.search(r'\[(\d+)\]', present_text).group(1)) if re.search(r'\[(\d+)\]', present_text) else 0
+        absent = int(re.search(r'\[(\d+)\]', absent_text).group(1)) if re.search(r'\[(\d+)\]', absent_text) else 0
+        return {'attended': present, 'conducted': present + absent}
+    except Exception as e:
+        print(f"  -> Failed to scrape detail page {url}: {e}")
+        return {'attended': 0, 'conducted': 0}
