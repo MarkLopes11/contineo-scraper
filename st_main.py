@@ -223,9 +223,7 @@ if st.session_state.student_data_result:
                 subject_max_marks = 0.0
                 
                 # Calculate Sums for this Subject
-                # mark_data is likely: {'MSE': {'obtained': 15.0, 'max': 30.0}, ...}
                 for exam_type, data_entry in marks_data.items():
-                    
                     # Handle New Structure (Dict) from deep scraper
                     if isinstance(data_entry, dict):
                         obt = data_entry.get('obtained', 0.0)
@@ -239,7 +237,7 @@ if st.session_state.student_data_result:
                             # Fallback to Config if scraper returned 0 for max
                             subject_max_marks += config.get_max_marks(subject_code, exam_type)
                     
-                    # Handle Legacy/Simple Structure (Float) - just in case
+                    # Handle Legacy/Simple Structure (Float)
                     elif isinstance(data_entry, (int, float)):
                         subject_obtained_marks += data_entry
                         subject_max_marks += config.get_max_marks(subject_code, exam_type)
@@ -247,7 +245,13 @@ if st.session_state.student_data_result:
                 # Calculate Grade Point for this subject
                 if subject_max_marks > 0:
                     percentage = (subject_obtained_marks / subject_max_marks) * 100
-                    gp = calculate_grade_point(percentage)
+                    
+                    # --- ROUNDING LOGIC START ---
+                    # 84.5 becomes 85 (Grade O), 84.4 becomes 84 (Grade A)
+                    rounded_percentage = math.floor(percentage + 0.5)
+                    # --- ROUNDING LOGIC END ---
+
+                    gp = calculate_grade_point(rounded_percentage)
                     
                     weighted_gp_sum += (credits * gp)
                     total_credits_registered += credits
