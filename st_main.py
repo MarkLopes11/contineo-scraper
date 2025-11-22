@@ -42,7 +42,10 @@ def get_processed_student_data(prn, dob_day, dob_month, dob_year, full_name):
         return None
 
     attendance_records = web_scraper.extract_attendance_from_welcome_page(html)
-    cie_marks_records = web_scraper.extract_cie_marks(html)
+    
+    # UPDATED: Pass 'session' to allow deep scraping of marks
+    cie_marks_records = web_scraper.extract_cie_marks(session, html)
+    
     detailed_attendance_records = web_scraper.extract_detailed_attendance_info(session, html)
 
     return {
@@ -53,6 +56,19 @@ def get_processed_student_data(prn, dob_day, dob_month, dob_year, full_name):
         },
         "scraped_at": datetime.now(pytz.utc)
     }
+
+def calculate_grade_point(percentage):
+    """
+    Maps percentage to Grade Point (GP) based on the PG Program table.
+    """
+    if percentage >= 85.00: return 10
+    if 80.00 <= percentage <= 84.99: return 9
+    if 70.00 <= percentage <= 79.99: return 8
+    if 60.00 <= percentage <= 69.99: return 7
+    if 55.00 <= percentage <= 59.99: return 6
+    if 50.00 <= percentage <= 54.99: return 5
+    if 45.00 <= percentage <= 49.99: return 4
+    return 0 # Less than 45 or Fail
 
 # --- DB and Page Initialization ---
 if 'db_initialized' not in st.session_state:
@@ -65,24 +81,35 @@ st.header("🎓 Student Portal Data Viewer")
 st.markdown("Enter your username to fetch attendance, CIE marks, and see subject leaderboards.")
 
 # --- Session State and Input Section ---
+
+# 1. Initialize 'first_name' from LocalStorage if it doesn't exist in session
 if 'first_name' not in st.session_state:
     st.session_state.first_name = get_item(key="last_username") or ""
+
 if 'show_add_user_form' not in st.session_state:
     st.session_state.show_add_user_form = False
 if 'student_data_result' not in st.session_state:
     st.session_state.student_data_result = None
 
-st.sidebar.header("Student Lookup")
-first_name_input = st.sidebar.text_input(
-    "Enter your username:", value=st.session_state.first_name, key="first_name_key"
-).strip()
-
-if first_name_input != st.session_state.first_name:
+# 2. Callback function to clear data when username changes
+def on_user_change():
     st.session_state.student_data_result = None
-st.session_state.first_name = first_name_input
 
-if st.session_state.first_name:
-    st.sidebar.write(f"Welcome back, **{st.session_state.first_name}**!")
+st.sidebar.header("Student Lookup")
+
+# 3. Text Input bound DIRECTLY to session state key
+# Removing 'value=' fixes the flickering/reverting issue.
+st.sidebar.text_input(
+    "Enter your username:",
+    key="first_name",         # Binds to st.session_state.first_name
+    on_change=on_user_change  # Triggers immediately on Enter
+)
+
+# Access the value from state
+first_name_input = st.session_state.first_name.strip()
+
+if first_name_input:
+    st.sidebar.write(f"Welcome back, **{first_name_input}**!")
 
 col1, col2 = st.sidebar.columns(2)
 with col1:
@@ -171,6 +198,90 @@ if st.session_state.student_data_result:
         cie_marks_records = result["data"]["cie_marks"]
         detailed_attendance_records = result["data"].get("detailed_attendance", {})
 
+        # --- SGPI CALCULATION ---
+        if cie_marks_records:
+            st.markdown("### 📈 Academic Performance (Projected SGPI)")
+            
+            total_credits_registered = 0
+            weighted_gp_sum = 0
+            sgpi_details = []
+
+            for subject_code_raw, marks_data in cie_marks_records.items():
+                subject_code = subject_code_raw.strip()
+                subject_name = config.SUBJECT_CODE_TO_NAME_MAP.get(subject_code, subject_code)
+                
+                # --- CREDIT LOGIC ---
+                # Auto-detect credits based on subject name
+                if "lab" in subject_name.lower():
+                    credits = 1
+                elif "project" in subject_name.lower():
+                    credits = 3
+                else:
+                    credits = 3
+
+                subject_obtained_marks = 0.0
+                subject_max_marks = 0.0
+                
+                # Calculate Sums for this Subject
+                # mark_data is likely: {'MSE': {'obtained': 15.0, 'max': 30.0}, ...}
+                for exam_type, data_entry in marks_data.items():
+                    
+                    # Handle New Structure (Dict) from deep scraper
+                    if isinstance(data_entry, dict):
+                        obt = data_entry.get('obtained', 0.0)
+                        mx = data_entry.get('max', 0.0)
+                        
+                        subject_obtained_marks += obt
+                        
+                        if mx > 0:
+                            subject_max_marks += mx
+                        else:
+                            # Fallback to Config if scraper returned 0 for max
+                            subject_max_marks += config.get_max_marks(subject_code, exam_type)
+                    
+                    # Handle Legacy/Simple Structure (Float) - just in case
+                    elif isinstance(data_entry, (int, float)):
+                        subject_obtained_marks += data_entry
+                        subject_max_marks += config.get_max_marks(subject_code, exam_type)
+
+                # Calculate Grade Point for this subject
+                if subject_max_marks > 0:
+                    percentage = (subject_obtained_marks / subject_max_marks) * 100
+                    gp = calculate_grade_point(percentage)
+                    
+                    weighted_gp_sum += (credits * gp)
+                    total_credits_registered += credits
+                    
+                    # Grade Letter for display
+                    grade_letter = "F"
+                    if gp == 10: grade_letter = "O"
+                    elif gp == 9: grade_letter = "A"
+                    elif gp == 8: grade_letter = "B"
+                    elif gp == 7: grade_letter = "C"
+                    elif gp == 6: grade_letter = "D"
+                    elif gp == 5: grade_letter = "E"
+                    elif gp == 4: grade_letter = "P"
+
+                    sgpi_details.append(f"**{subject_name}** ({subject_code}): {percentage:.1f}% → Grade {grade_letter} ({gp}) × {credits} Credit(s)")
+
+            if total_credits_registered > 0:
+                calculated_sgpi = weighted_gp_sum / total_credits_registered
+                
+                sgpi_col1, sgpi_col2 = st.columns([1, 3])
+                with sgpi_col1:
+                    st.metric(label="Predicted SGPI", value=f"{calculated_sgpi:.2f}")
+                with sgpi_col2:
+                    st.info(f"**Calculation:** Σ(Credits × GP) / Σ(Credits) = {weighted_gp_sum} / {total_credits_registered}")
+                    with st.expander("View Subject-wise Breakdown"):
+                        for det in sgpi_details:
+                            st.markdown(f"- {det}")
+                        st.caption("*Note: SGPI is calculated based on the percentage of marks currently obtained in available exams vs. their max marks.*")
+            else:
+                st.caption("No valid credits found for calculations.")
+            
+            st.divider()
+
+        # --- EXISTING COLUMNS ---
         col1, col2 = st.columns(2)
 
         with col1:
@@ -178,8 +289,6 @@ if st.session_state.student_data_result:
             if attendance_records:
                 attendance_display_data = []
                 for record in attendance_records:
-                    # --- THIS IS THE CRITICAL FIX ---
-                    # Strip the subject code to ensure a clean match
                     subject_code = record['subject'].strip() 
                     
                     if subject_code == "CSM601": continue
@@ -188,7 +297,6 @@ if st.session_state.student_data_result:
                     current_percentage = record.get('percentage', 0)
                     
                     required_str = "N/A"
-                    # The rest of the logic can now correctly find the key
                     if detailed_attendance_records and subject_code in detailed_attendance_records:
                         details = detailed_attendance_records[subject_code]
                         attended = details.get('attended', 0)
@@ -238,30 +346,55 @@ if st.session_state.student_data_result:
 
                         subject_total, has_valid_marks = 0.0, False
                         defined_order = ["MSE", "TH-ISE1", "TH-ISE2", "ESE", "PR-ISE1", "PR-ISE2"]
+                        
                         temp_marks_to_print = {}
 
                         for exam_type in defined_order:
                             if exam_type in marks_dict and (not exam_types_to_show or exam_type in exam_types_to_show):
-                                mark = marks_dict.get(exam_type)
-                                temp_marks_to_print[exam_type] = mark
-                                if isinstance(mark, (int, float)):
-                                    subject_total += mark
+                                mark_entry = marks_dict.get(exam_type)
+                                temp_marks_to_print[exam_type] = mark_entry
+                                
+                                # Add to Total Calculation
+                                if isinstance(mark_entry, dict):
+                                    # New Structure
+                                    obt = mark_entry.get('obtained', 0)
+                                    subject_total += obt
+                                    has_valid_marks = True
+                                elif isinstance(mark_entry, (int, float)):
+                                    # Old Structure
+                                    subject_total += mark_entry
                                     has_valid_marks = True
                         
                         if temp_marks_to_print:
-                            for exam_type, mark_value in temp_marks_to_print.items():
-                                st.markdown(f"• **{exam_type}:** {mark_value if mark_value is not None else 'N/A'}")
+                            for exam_type, val in temp_marks_to_print.items():
+                                # Display Logic: Handle Dict vs Float
+                                if isinstance(val, dict):
+                                    st.markdown(f"• **{exam_type}:** {val['obtained']} / {val['max']}")
+                                else:
+                                    st.markdown(f"• **{exam_type}:** {val if val is not None else 'N/A'}")
+
                             if has_valid_marks:
-                                st.markdown(f"  ---\n  **Your Total (Filtered): {subject_total:.2f}**")
+                                st.markdown(f"  ---\n  **Your Total (Obtained): {subject_total:.2f}**")
                         else:
                             st.markdown("_(No applicable marks to display)_")
 
                         st.markdown("---")
+                        
+                        # Leaderboard Button Logic
                         if st.button(f"🏆 Show Leaderboard for {subject_name}", key=f"lb_{subject_code}"):
                             with st.spinner("Fetching leaderboard..."):
-                                exam_types_for_lb = [exam for exam, mark in marks_dict.items() if isinstance(mark, (int, float))]
+                                # Collect available exams to show LB for
+                                exam_types_for_lb = []
+                                for e, m in marks_dict.items():
+                                    # Check if we have a valid number for this exam
+                                    if isinstance(m, dict) and isinstance(m.get('obtained'), (int, float)):
+                                        exam_types_for_lb.append(e)
+                                    elif isinstance(m, (int, float)):
+                                        exam_types_for_lb.append(e)
+
                                 if not exam_types_for_lb:
                                     st.caption("_No numeric marks to generate a leaderboard._")
+                                
                                 for exam_type in exam_types_for_lb:
                                     leaderboard = db_utils.get_subject_leaderboard_pg(subject_code, exam_type)
                                     if leaderboard:
@@ -270,7 +403,9 @@ if st.session_state.student_data_result:
                                         medals = ["🥇", "🥈", "🥉"]
                                         for i, (name, score) in enumerate(leaderboard):
                                             medal = medals[i] if i < 3 else "•"
-                                            entry = f"**{medal} {name}: {score:.2f} (You)**" if name == current_full_name else f"{medal} {name}: {score:.2f}"
+                                            score_display = score
+                                            
+                                            entry = f"**{medal} {name}: {score_display} (You)**" if name == current_full_name else f"{medal} {name}: {score_display}"
                                             entries.append(entry)
                                         st.markdown("  \n".join(entries))
                                     else:

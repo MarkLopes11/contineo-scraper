@@ -78,3 +78,46 @@ SUBJECT_CODE_TO_NAME_MAP = {
     "25MDMBM2" : "Economics For Businees"
 
 }
+
+MAX_MARKS_CONFIG = {
+    # A. DEFAULTS (Applied if no specific subject rule exists)
+    "DEFAULT": {
+        "MSE": 30,
+        "TH-ISE1": 20,
+        "TH-ISE2": 20,
+        "ESE": 30,
+        "PR-ISE1": 25,  # Labs usually out of 25
+        "PR-ISE2": 25,
+    },
+
+    # B. SUBJECT SPECIFIC OVERRIDES
+    # Format: "SUBJECT_CODE": { "EXAM_NAME": MAX_MARKS }
+    
+    # "CSL701": {         # Example: Machine Learning Lab
+    #     "PR-ISE1": 10,  # <--- HERE: You specify this is out of 10
+    #     "PR-ISE2": 10   # <--- HERE: You specify this is out of 10
+    # },
+    
+    "CSDL7013": {       # Example: NLP Lab
+        "PR-ISE1": 10,
+        "PR-ISE2": 15
+    },
+
+    "CSDL7023": {       # Example: IR Lab
+        "PR-ISE1": 10,
+        "PR-ISE2": 15
+    }
+}
+
+def get_max_marks(subject_code, exam_type):
+    """
+    Returns the max marks for a specific subject and exam.
+    Prioritizes specific subject rules, falls back to defaults.
+    """
+    # 1. Check if there are special rules for this Subject Code
+    if subject_code in MAX_MARKS_CONFIG:
+        if exam_type in MAX_MARKS_CONFIG[subject_code]:
+            return MAX_MARKS_CONFIG[subject_code][exam_type]
+
+    # 2. Fallback to Default values
+    return MAX_MARKS_CONFIG["DEFAULT"].get(exam_type, 20) # Default to 20 if unknown

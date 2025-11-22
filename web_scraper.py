@@ -1,9 +1,8 @@
-# web_scraper.py
 import requests
 from bs4 import BeautifulSoup
 import re
-from urllib.parse import urljoin # Moved import here
-import config # Import your config file
+from urllib.parse import urljoin
+import config  # Import your config file
 
 def login_and_get_welcome_page(prn, dob_day, dob_month_val, dob_year, user_full_name_for_check):
     session = requests.Session()
@@ -12,18 +11,18 @@ def login_and_get_welcome_page(prn, dob_day, dob_month_val, dob_year, user_full_
         "Referer": config.LOGIN_URL
     })
     try:
-        # print(f"Navigating to login page: {config.LOGIN_URL}")
+        # 1. Get Login Page
         response_get = session.get(config.LOGIN_URL, timeout=20)
         response_get.raise_for_status()
-        # print("Successfully fetched login page.")
         soup_login = BeautifulSoup(response_get.content, "html.parser")
         login_form = soup_login.find("form", {"id": "login-form"})
+        
         if not login_form:
-            print("Could not find the login form with id='login-form'. This is critical.")
+            print("Could not find login form.")
             return None, None
-        # print("Successfully found login form with id='login-form'.")
+
+        # 2. Prepare Payload
         password_string_for_payload = f"{dob_year}-{str(dob_month_val).zfill(2)}-{str(dob_day).zfill(2)}"
-        # print(f"Constructed password string for '{config.PASSWORD_FIELD_NAME}': {password_string_for_payload}")
         payload = {
             config.PRN_FIELD_NAME: prn,
             config.DAY_FIELD_NAME: dob_day,
@@ -31,224 +30,256 @@ def login_and_get_welcome_page(prn, dob_day, dob_month_val, dob_year, user_full_
             config.YEAR_FIELD_NAME: dob_year,
             config.PASSWORD_FIELD_NAME: password_string_for_payload,
         }
+
+        # Handle hidden fields
         hidden_inputs = login_form.find_all("input", {"type": "hidden"})
-        if hidden_inputs:
-            # print("Found hidden fields in the targeted login form (id='login-form'):")
-            for hidden_input in hidden_inputs:
-                name = hidden_input.get("name")
-                value = hidden_input.get("value")
-                if name:
-                    if name not in [config.PRN_FIELD_NAME, config.DAY_FIELD_NAME, config.MONTH_FIELD_NAME, config.YEAR_FIELD_NAME, config.PASSWORD_FIELD_NAME]:
-                        payload[name] = value if value is not None else ""
-                        # print(f"  Added hidden field: {name}={payload[name]}")
-        # else:
-            # print("No hidden input fields found in the login form (id='login-form').")
-        # print(f"Payload to be sent: {payload}")
+        for hidden_input in hidden_inputs:
+            name = hidden_input.get("name")
+            value = hidden_input.get("value")
+            if name and name not in payload:
+                payload[name] = value if value is not None else ""
+
+        # 3. Post Login
         form_action = login_form.get("action")
-        actual_post_url = config.FORM_ACTION_URL
-        if form_action:
-            actual_post_url = urljoin(config.LOGIN_URL, form_action)
-        # print(f"Attempting to POST login data to: {actual_post_url}")
+        actual_post_url = urljoin(config.LOGIN_URL, form_action) if form_action else config.FORM_ACTION_URL
+        
         response_post = session.post(actual_post_url, data=payload, timeout=20)
         response_post.raise_for_status()
-        # print(f"POST request completed. Status: {response_post.status_code}")
-        # print(f"Current URL after POST: {response_post.url}")
         welcome_page_html = response_post.text
-        login_successful = False
-        if user_full_name_for_check.lower() in welcome_page_html.lower():
-            print(f"Login successful! Welcome {user_full_name_for_check}.")
-            login_successful = True
-        elif "id=\"gaugeTypeMulti\"" in welcome_page_html: 
-            print(f"Login successful (found attendance chart)! Welcome {user_full_name_for_check}.")
-            login_successful = True
-        elif "id=\"stackedBarChart_1\"" in welcome_page_html: 
-            print(f"Login successful (found CIE chart)! Welcome {user_full_name_for_check}.")
-            login_successful = True
+
+        # 4. Verify Login
+        if user_full_name_for_check.lower() in welcome_page_html.lower() or "logout" in welcome_page_html.lower():
+            print(f"Login successful for {user_full_name_for_check}.")
+            return session, welcome_page_html
         else:
-            temp_soup_post = BeautifulSoup(welcome_page_html, "html.parser")
-            if temp_soup_post.find("form", {"id": "login-form"}):
-                print("Login FAILED. The page after POST still contains the login form.")
-                if "invalid username or password" in welcome_page_html.lower():
-                     print("Reason: Invalid username or password detected on page.")
-            else:
-                print("Login status uncertain. User identifier not found, dashboard elements not found, but it's not clearly the login page either.")
-        if not login_successful:
+            print("Login failed or dashboard not reached.")
             return None, None
-        return session, welcome_page_html
-    except requests.exceptions.HTTPError as e:
-        print(f"HTTP error occurred during login: {e}")
-        if e.response is not None: print(f"Response content (first 500 chars): {e.response.text[:500]}...")
-        return None, None
-    except requests.exceptions.RequestException as e:
-        print(f"A request error occurred during login: {e}")
-        return None, None
+
     except Exception as e:
-        print(f"An unexpected error occurred during login: {e}")
+        print(f"Error during login: {e}")
         return None, None
 
 def extract_attendance_from_welcome_page(welcome_page_html):
-    if not welcome_page_html: return None
+    """
+    Extracts attendance from the dashboard Gauge Chart logic.
+    """
+    if not welcome_page_html: return []
     soup = BeautifulSoup(welcome_page_html, "html.parser")
     attendance_data = []
-    found_data_script = False
+    
     scripts = soup.find_all("script")
-    for i, script in enumerate(scripts):
-        if script.string: 
-            script_content = script.string.strip()
-            if "gaugeTypeMulti" in script_content and "type: \"gauge\"" in script_content and "columns:" in script_content:
-                data_block_regex = r"data\s*:\s*(\{[\s\S]*?type\s*:\s*\"gauge\"[\s\S]*?\})"
-                data_block_match = re.search(data_block_regex, script_content, re.DOTALL)
-                if data_block_match:
-                    data_object_str = data_block_match.group(1) 
-                    columns_array_capture_regex = r"columns\s*:\s*(\[[\s\S]*?\])\s*,\s*type\s*:\s*\"gauge\""
-                    columns_match = re.search(columns_array_capture_regex, data_object_str, re.DOTALL)
-                    if columns_match:
-                        columns_the_actual_array_str = columns_match.group(1).strip() 
-                        pair_regex = r"\[\s*['\"]([^'\"]+)['\"]\s*,\s*(\d+)\s*\]"
-                        subject_value_pairs = re.findall(pair_regex, columns_the_actual_array_str)
-                        if subject_value_pairs:
-                            for subject, value in subject_value_pairs:
-                                attendance_data.append({"subject": subject.strip(), "percentage": int(value)})
-                            found_data_script = True 
-                            print("  Successfully parsed attendance data.")
-                            break 
-    if not found_data_script: 
-        print("\nCould not find or parse the specific attendance chart data.")
-        return None
-    return attendance_data
+    for script in scripts:
+        if script.string and "gaugeTypeMulti" in script.string:
+            # Regex to find the data array: [['Subject', 85], ['Subject2', 90]]
+            columns_match = re.search(r"columns\s*:\s*(\[[\s\S]*?\])\s*,\s*type\s*:\s*\"gauge\"", script.string)
+            if columns_match:
+                columns_str = columns_match.group(1)
+                # Extract pairs: ['Subject Name', Value]
+                pairs = re.findall(r"\[\s*['\"](.*?)['\"]\s*,\s*(\d+)\s*\]", columns_str)
+                for subject, value in pairs:
+                    attendance_data.append({
+                        "subject": subject.strip(),
+                        "percentage": int(value)
+                    })
+                return attendance_data
+    return []
 
-def extract_cie_marks(welcome_page_html):
-    if not welcome_page_html: return None
-    soup = BeautifulSoup(welcome_page_html, "html.parser")
-    cie_data = {} 
-    scripts = soup.find_all("script")
-    found_cie_script = False
-    for i, script in enumerate(scripts):
-        if script.string:
-            script_content = script.string.strip()
-            if "stackedBarChart_1" in script_content and "type: \"bar\"" in script_content and "categories:" in script_content:
-                chart_config_regex = r"bb\.generate\s*\(\s*(\{[\s\S]*?bindto\s*:\s*[\"']#stackedBarChart_1[\"'][\s\S]*?\}\s*)\s*\)\s*;"
-                bb_generate_match = re.search(chart_config_regex, script_content, re.DOTALL)
-                if bb_generate_match:
-                    chart_config_str = bb_generate_match.group(1)
-                    categories_match = re.search(r"categories\s*:\s*(\[[\s\S]*?\])", chart_config_str, re.DOTALL)
-                    subjects = []
-                    if categories_match:
-                        categories_str = categories_match.group(1)
-                        subjects = re.findall(r"['\"]([^'\"]+)['\"]", categories_str)
-                    else: continue 
-                    if not subjects: continue
-                    columns_data_match = re.search(r"columns\s*:\s*(\[[\s\S]*?\])\s*,\s*type\s*:\s*\"bar\"", chart_config_str, re.DOTALL)
-                    if columns_data_match:
-                        columns_str = columns_data_match.group(1)
-                        series_regex = r"\[\s*['\"]([^'\"]+)['\"]\s*([^\]]*)?\s*\]"
-                        all_series_matches = re.findall(series_regex, columns_str)
-                        for exam_type, marks_values_str in all_series_matches:
-                            parsed_marks = []
-                            if marks_values_str: 
-                                individual_mark_items = marks_values_str.strip(',').split(',')
-                                for mark_val_raw in individual_mark_items:
-                                    mark_val = mark_val_raw.strip()
-                                    if mark_val.lower() == 'null': parsed_marks.append(None)
-                                    elif mark_val.startswith('"') and mark_val.endswith('"'):
-                                        val_inside_quotes = mark_val[1:-1]
-                                        if val_inside_quotes.lower() == 'null': parsed_marks.append(None)
-                                        elif not val_inside_quotes: parsed_marks.append(None)
-                                        else:
-                                            try: parsed_marks.append(float(val_inside_quotes))
-                                            except ValueError: parsed_marks.append(val_inside_quotes) 
-                                    elif not mark_val: parsed_marks.append(None)
-                                    else: 
-                                        try: parsed_marks.append(float(mark_val))
-                                        except ValueError: parsed_marks.append(mark_val)
-                            for idx, subject_code in enumerate(subjects):
-                                if subject_code not in cie_data: cie_data[subject_code] = {}
-                                if idx < len(parsed_marks): cie_data[subject_code][exam_type] = parsed_marks[idx]
-                                else: cie_data[subject_code][exam_type] = None 
-                        found_cie_script = True 
-                        print(f"  Successfully parsed CIE marks for {len(subjects)} subjects and {len(all_series_matches)} exam types.")
-                        break 
-    if not found_cie_script:
-        print("\nCould not find or parse the CIE marks data from any script tag.")
-        return None
-    return cie_data
+def get_cie_detail_urls(dashboard_html):
+    """
+    Parses the dashboard to find the URL for each subject's "CIE" detail page.
+    Returns a dict: { "Subject Name": "URL" }
+    """
+    soup = BeautifulSoup(dashboard_html, "html.parser")
+    subject_urls = {}
+
+    # The HTML you showed uses <ul uk-tab> with onclick="window.location.href='...'"
+    # It might also use standard <a href> in the table list.
+    
+    # Strategy 1: Look for the "Course registration" table (First screenshot)
+    # The "CIE" button usually has a link containing 'task=ciedetails'
+    links = soup.find_all("a", href=True)
+    for link in links:
+        href = link['href']
+        if "task=ciedetails" in href:
+            # Try to find the course code in the same row
+            row = link.find_parent("tr")
+            if row:
+                cols = row.find_all("td")
+                if cols:
+                    subject_code = cols[0].get_text(strip=True)
+                    subject_urls[subject_code] = href
+                    continue
+
+    # Strategy 2: Look for Tab-based layout (onclick events)
+    # <a href="#" onclick="window.location.href='index.php?option=...task=ciedetails...'">CSC702</a>
+    tabs = soup.find_all("a", onclick=True)
+    for tab in tabs:
+        onclick_text = tab['onclick']
+        if "task=ciedetails" in onclick_text:
+            # Extract URL from: window.location.href='URL'
+            match = re.search(r"href=['\"](.*?)['\"]", onclick_text)
+            if match:
+                url = match.group(1)
+                # Use text inside <a> as subject code (e.g., "CSC702")
+                subject_code = tab.get_text(strip=True)
+                if subject_code:
+                    subject_urls[subject_code] = url
+
+    print(f"Found {len(subject_urls)} subject detail links.")
+    return subject_urls
+
+def scrape_subject_detail_page(session, url):
+    """
+    Visits a subject's detail page and scrapes the 'uk-table' for marks.
+    Returns: { "ExamName": { "obtained": 16.0, "max": 20.0 } }
+    """
+    full_url = urljoin(config.LOGIN_URL, url)
+    try:
+        response = session.get(full_url, timeout=15)
+        soup = BeautifulSoup(response.content, "html.parser")
+        
+        marks_data = {}
+        
+        # Find the table with class 'uk-table cn-cie-table'
+        table = soup.find("table", class_="cn-cie-table")
+        if not table:
+            return {}
+
+        # 1. Extract Headers (Exam Names)
+        # The headers are in the <thead>. Note: There are empty <th> for spacing in your HTML.
+        headers = []
+        header_row = table.find("thead").find("tr")
+        for th in header_row.find_all("th"):
+            text = th.get_text(strip=True)
+            # Only keep headers that look like exams (ignore 'Attendance', 'Eligibility', empty)
+            if text and text not in ["Attendance", "Eligibility", "Final IA"]:
+                headers.append(text)
+        
+        # 2. Extract Values (Row 1)
+        # Your HTML shows the marks are in the first <tr> of <tbody>
+        body_row = table.find("tbody").find("tr")
+        if not body_row:
+            return {}
+            
+        cells = body_row.find_all("td")
+        
+        # Map headers to cells. 
+        # Note: Your table has empty <td> cells between marks. We need to filter them or count carefully.
+        # Strategy: Get all non-empty text cells that contain a slash '/'
+        
+        valid_cells = [td.get_text(strip=True) for td in cells if "/" in td.get_text(strip=True)]
+        
+        # Safety check: Do we have the same number of headers and value cells?
+        # If headers are [TH-ISE1, TH-ISE2, MSE, ESE] and cells are [16/20, 15/20, ...], we match them.
+        
+        for i, exam_name in enumerate(headers):
+            if i < len(valid_cells):
+                raw_text = valid_cells[i] # e.g., "16.00/20"
+                try:
+                    parts = raw_text.split('/')
+                    if len(parts) == 2:
+                        obt = float(parts[0])
+                        max_m = float(parts[1])
+                        
+                        marks_data[exam_name] = {
+                            "obtained": obt,
+                            "max": max_m
+                        }
+                except ValueError:
+                    continue
+
+        return marks_data
+
+    except Exception as e:
+        print(f"Error scraping detail page {url}: {e}")
+        return {}
+
+def extract_cie_marks(session_or_html, html_content=None):
+    """
+    MAIN FUNCTION called by app.py.
+    Now accepts 'session' as the first argument (tuple unpacking handled inside if needed)
+    to allow deep scraping.
+    """
+    # Handle legacy calls where only HTML was passed
+    session = None
+    dashboard_html = ""
+
+    if isinstance(session_or_html, requests.Session):
+        session = session_or_html
+        dashboard_html = html_content
+    else:
+        # If app.py passed only HTML (old version), we can't deep scrape. 
+        # Return None or try regex on dashboard (Old logic).
+        # Ideally, app.py should be updated to pass (session, html).
+        print("Warning: Session not provided to extract_cie_marks. Cannot fetch max marks.")
+        return {}
+
+    all_subjects_data = {}
+    
+    # 1. Get Links
+    subject_links = get_cie_detail_urls(dashboard_html)
+    
+    # 2. Iterate and Scrape
+    print("Starting deep scrape of subject pages...")
+    for subject, url in subject_links.items():
+        # Clean subject name (e.g., remove newlines)
+        subject = subject.strip()
+        
+        # Scrape
+        marks = scrape_subject_detail_page(session, url)
+        
+        if marks:
+            all_subjects_data[subject] = marks
+            
+    return all_subjects_data
 
 def extract_detailed_attendance_info(session, welcome_page_html):
     """
-    Parses the welcome page to find links to detailed attendance pages.
-    This version handles THREE layouts and returns a DICTIONARY to match the old app structure.
+    Extracts detailed attendance (Conducted vs Attended).
     """
-    if not welcome_page_html or not session:
-        return {}
+    if not welcome_page_html or not session: return {}
 
     soup = BeautifulSoup(welcome_page_html, "html.parser")
     detailed_data = {}
     
-    # List of potential identifiers for the main subjects table.
-    potential_table_identifiers = [
-        {"class": "dash_even_row"},  # Your class's layout
-        {"class": "dash_od_row"},    # Luke's class's layout
-    ]
-    
-    table = None
-    for identifier in potential_table_identifiers:
-        found_table = soup.find("table", identifier)
-        if found_table and found_table.tbody and len(found_table.tbody.find_all("tr")) > 0:
-            print(f"Scraping Strategy: Found table-based layout using identifier: {identifier}")
-            table = found_table
-            break
-            
-    # STRATEGY 1: If we found a table
-    if table:
-        for row in table.tbody.find_all("tr"):
-            try:
-                cells = row.find_all("td")
-                if len(cells) < 2: continue
-                
-                subject_code = cells[0].text.strip() # Strip whitespace
-                link_tag = row.find("a", href=re.compile(r"task=attendencelist"))
-                
-                if link_tag and subject_code:
-                    details = _scrape_attendance_detail_page(session, link_tag['href'])
-                    detailed_data[subject_code] = details
+    # Look for the "Attendance" buttons (usually link to task=attendencelist)
+    links = soup.find_all("a", href=True)
+    for link in links:
+        if "task=attendencelist" in link['href']:
+            # Attempt to find Subject Name
+            # It might be in the same row
+            row = link.find_parent("tr")
+            if row:
+                cols = row.find_all("td")
+                if cols:
+                    subject = cols[0].get_text(strip=True)
                     
-            except Exception as e:
-                print(f"Error scraping a row in table layout: {e}")
-        return detailed_data
+                    # Go to page
+                    try:
+                        full_url = urljoin(config.LOGIN_URL, link['href'])
+                        resp = session.get(full_url, timeout=10)
+                        det_soup = BeautifulSoup(resp.content, "html.parser")
+                        
+                        # Parse Green (Present) and Red (Absent) spans
+                        # Example: <span class="cn-color-green">[12]</span>
+                        green_span = det_soup.find("span", class_="cn-color-green")
+                        red_span = det_soup.find("span", class_="cn-color-red")
+                        
+                        present = 0
+                        absent = 0
+                        
+                        if green_span:
+                            m = re.search(r"\[(\d+)\]", green_span.get_text())
+                            if m: present = int(m.group(1))
+                        
+                        if red_span:
+                            m = re.search(r"\[(\d+)\]", red_span.get_text())
+                            if m: absent = int(m.group(1))
 
-    # STRATEGY 2: If no table was found, try the Tab-Based Layout
-    tab_container = soup.find("ul", attrs={"uk-tab": ""})
-    if tab_container:
-        print("Scraping Strategy: Found tab-based layout.")
-        for tab in tab_container.find_all("li"):
-            try:
-                link_tag = tab.find("a")
-                if not link_tag: continue
-                
-                subject_code = link_tag.text.strip() # Strip whitespace
-                
-                if link_tag.has_attr('href') and subject_code:
-                    details = _scrape_attendance_detail_page(session, link_tag['href'])
-                    detailed_data[subject_code] = details
-                    
-            except Exception as e:
-                print(f"Error scraping a tab in tabbed layout: {e}")
-        return detailed_data
-
-    print("CRITICAL: Could not find attendance data using any known layout.")
-    return {}
-
-def _scrape_attendance_detail_page(session, url):
-    """ Helper function to visit a detail page and extract Present/Absent numbers. """
-    try:
-        response = session.get(urljoin(config.LOGIN_URL, url), timeout=30)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, "html.parser")
-        present_text = soup.find("span", class_="cn-color-green").text if soup.find("span", class_="cn-color-green") else ""
-        absent_text = soup.find("span", class_="cn-color-red").text if soup.find("span", class_="cn-color-red") else ""
-        present = int(re.search(r'\[(\d+)\]', present_text).group(1)) if re.search(r'\[(\d+)\]', present_text) else 0
-        absent = int(re.search(r'\[(\d+)\]', absent_text).group(1)) if re.search(r'\[(\d+)\]', absent_text) else 0
-        return {'attended': present, 'conducted': present + absent}
-    except Exception as e:
-        print(f"  -> Failed to scrape detail page {url}: {e}")
-        return {'attended': 0, 'conducted': 0}
+                        detailed_data[subject] = {
+                            "attended": present,
+                            "conducted": present + absent
+                        }
+                    except:
+                        pass
+    return detailed_data
