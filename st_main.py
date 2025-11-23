@@ -82,6 +82,7 @@ def calculate_grade_point(percentage):
 # --- Init ---
 if 'db_initialized' not in st.session_state:
     db_utils.create_db_and_table_pg()
+    db_utils.create_feedback_table_pg()
     st.session_state.db_initialized = True
 
 st.set_page_config(page_title="Student Portal Viewer", layout="wide")
@@ -397,3 +398,43 @@ if st.session_state.student_data_result:
 
 elif (fetch_button or force_refresh_button) and not first_name_input:
     st.sidebar.warning("Please enter a username to fetch data.")
+
+
+# --- Append this to the very end of app.py ---
+
+# --- Append this to the very end of app.py ---
+
+st.divider()
+st.subheader("💬 Feedback & Support")
+
+with st.expander("📝 Report a bug or leave a suggestion"):
+    with st.form("feedback_form_main"):
+        current_user = st.session_state.first_name.strip() if st.session_state.first_name else "Anonymous"
+        
+        c1, c2 = st.columns([1, 4])
+        
+        with c1:
+            st.write("**Rate your experience:**")
+            # st.feedback returns 0 for 1 star, 4 for 5 stars. Returns None if untouched.
+            sentiment_mapping = ["1", "2", "3", "4", "5"]
+            selected_sentiment = st.feedback("stars")
+            
+        with c2:
+            fb_msg = st.text_area("Message", placeholder="Tell us what you think...")
+
+        submitted_fb = st.form_submit_button("Submit Feedback")
+
+        if submitted_fb:
+            # Calculate rating (index + 1). Default to 0 if they didn't click stars.
+            final_rating = (selected_sentiment + 1) if selected_sentiment is not None else 0
+            
+            if final_rating == 0:
+                st.warning("⚠️ Please select a Star Rating.")
+            elif not fb_msg.strip():
+                st.warning("⚠️ Please write a message.")
+            else:
+                if db_utils.save_feedback_pg(current_user, fb_msg, final_rating):
+                    st.success("Thank you! Your feedback has been recorded. ❤️")
+                    st.balloons()
+                else:
+                    st.error("Internal Error: Could not save feedback.")

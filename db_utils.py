@@ -317,3 +317,45 @@ def get_semester_leaderboard_pg(semester, limit=5):
     finally:
         cursor.close()
         conn.close()
+
+
+def create_feedback_table_pg():
+    """Creates a table to store user feedback."""
+    conn = get_db_connection() # Use your existing connection function
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS feedback (
+                    id SERIAL PRIMARY KEY,
+                    username TEXT,
+                    message TEXT,
+                    rating INTEGER,
+                    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            print(f"Error creating feedback table: {e}")
+
+
+def save_feedback_pg(username, message, rating):
+    """Saves feedback to the database."""
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO feedback (username, message, rating)
+                VALUES (%s, %s, %s)
+            """, (username, message, rating))
+            conn.commit()
+            cur.close()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error saving feedback: {e}")
+            return False
+    return False
