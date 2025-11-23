@@ -1,5 +1,3 @@
-# app.py
-
 import streamlit as st
 import os
 from dotenv import load_dotenv
@@ -9,7 +7,7 @@ import pytz
 import math 
 import re 
 
-# --- Setup ---
+# --- Local Storage Setup ---
 try:
     _localS = LocalStorage()
 except Exception:
@@ -28,13 +26,11 @@ import web_scraper
 
 # --- Helper Functions ---
 
-def identify_semester(subject_code):
-    """Extracts semester from subject code (CSC701 -> 7)."""
-    match = re.search(r'\d', subject_code)
-    return int(match.group()) if match else 0
-
 def scrape_fresh_data(user_details):
-    """Scrapes data and organizes it BY SEMESTER."""
+    """
+    Scrapes data and groups EVERYTHING under the current semester 
+    found on the welcome page (e.g., "SEM 07").
+    """
     session, html = web_scraper.login_and_get_welcome_page(
         user_details["prn"], user_details["dob_day"], 
         user_details["dob_month"], user_details["dob_year"], 
@@ -42,30 +38,29 @@ def scrape_fresh_data(user_details):
     )
     if not html: return None
 
-    # Scrape Raw Data
+    # 1. Scrape Raw Data
     raw_marks = web_scraper.extract_cie_marks(session, html)
     raw_att = web_scraper.extract_detailed_attendance_info(session, html)
     
-    # Organize by Semester
-    # Structure: { 7: { 'cie': {...}, 'att': {...} }, 8: { ... } }
-    organized_data = {}
+    # 2. Extract Official Semester from Header (The Source of Truth)
+    current_sem_num = web_scraper.extract_student_semester(html)
+    
+    # Fallback if scraping fails (shouldn't happen if logged in properly)
+    if not current_sem_num:
+        current_sem_num = 0 
 
-    # 1. Process Marks
-    for sub, exams in raw_marks.items():
-        sem = identify_semester(sub)
-        if sem == 0: continue
-        if sem not in organized_data: organized_data[sem] = {'cie': {}, 'att': {}}
-        organized_data[sem]['cie'][sub] = exams
-
-    # 2. Process Attendance
-    for sub, details in raw_att.items():
-        sem = identify_semester(sub)
-        if sem == 0: continue
-        if sem not in organized_data: organized_data[sem] = {'cie': {}, 'att': {}}
-        organized_data[sem]['att'][sub] = details
+    # 3. Organize Data by that single Semester
+    # We no longer guess semester per subject. All visible subjects belong to the current sem.
+    organized_data = {
+        current_sem_num: {
+            'cie': raw_marks,
+            'att': raw_att
+        }
+    }
 
     return {
         "semesters_data": organized_data,
+        "latest_sem": current_sem_num,
         "scraped_at": datetime.now(pytz.utc)
     }
 
@@ -130,7 +125,7 @@ if st.session_state.show_add_user_form:
                     st.session_state.show_add_user_form = False
                     st.rerun()
                 else:
-                    st.error("Failed to save.")
+                    st.error("Failed to save. Username or PRN may already exist.")
 
 # --- Fetch Logic ---
 should_fetch = (fetch_button or force_refresh_button or (first_name_input and not st.session_state.student_data_result))
@@ -143,17 +138,19 @@ if should_fetch and first_name_input:
         result = None
         source = "Database"
 
+        # 1. Try DB Cache
         if not force_refresh_button:
             with st.spinner("Checking cache..."):
                 result = db_utils.get_student_data_from_db(user_details["id"])
         
+        # 2. Scrape if needed
         if not result or force_refresh_button:
             source = "Live Portal"
             with st.spinner("Fetching from portal..."):
                 scrape_res = scrape_fresh_data(user_details)
                 if scrape_res:
                     result = scrape_res
-                    # Save All Semesters to DB
+                    # Save to DB (Marks & Attendance linked to Current Semester)
                     for sem, data in result["semesters_data"].items():
                         db_utils.update_student_marks_in_db_pg(
                             user_details["id"], sem, data['cie'], result["scraped_at"]
@@ -161,10 +158,6 @@ if should_fetch and first_name_input:
                         db_utils.update_attendance_in_db_pg(
                             user_details["id"], sem, data['att']
                         )
-                    
-                    # Add latest_sem for display logic
-                    latest = max(result["semesters_data"].keys()) if result["semesters_data"] else None
-                    result["latest_sem"] = latest
 
         if result:
             st.session_state.student_data_result = {"user_details": user_details, "data_pkg": result, "source": source}
@@ -189,8 +182,7 @@ if st.session_state.student_data_result:
         else: st.success(f"🔄 Live: {ts}")
 
     all_sem_data = data.get("semesters_data", {})
-    latest_sem = data.get("latest_sem")
-
+    
     if all_sem_data:
         # Semester Selector
         sem_options = sorted(all_sem_data.keys(), reverse=True)
@@ -213,6 +205,7 @@ if st.session_state.student_data_result:
             for sub_code, exams in marks_data.items():
                 sub_name = config.SUBJECT_CODE_TO_NAME_MAP.get(sub_code, sub_code)
                 
+                # Determine Credits based on subject name (Theory vs Lab)
                 if "lab" in sub_name.lower(): cred = 1
                 elif "project" in sub_name.lower(): cred = 3
                 else: cred = 3
@@ -273,6 +266,8 @@ if st.session_state.student_data_result:
                                 st.write(f"{icon} {bold}{n}: {s:.2f}{bold}")
                         else:
                             st.caption("No leaderboard data.")
+        else:
+            st.info("No marks available for this semester.")
         
         st.divider()
 
@@ -285,8 +280,9 @@ if st.session_state.student_data_result:
                 att_display = []
                 for sub, det in att_data.items():
                     name = config.SUBJECT_CODE_TO_NAME_MAP.get(sub, sub)
-                    att = det['attended']
-                    cond = det['conducted']
+                    att = det.get('attended', 0)
+                    cond = det.get('conducted', 0)
+                    
                     if cond > 0:
                         p = (att/cond)*100
                         status = "N/A"
@@ -309,8 +305,14 @@ if st.session_state.student_data_result:
                     name = config.SUBJECT_CODE_TO_NAME_MAP.get(sub, sub)
                     with st.expander(f"{name}"):
                         for ex, val in exams.items():
-                            st.write(f"**{ex}:** {val['obtained']} / {val['max']}")
+                            if isinstance(val, dict):
+                                st.write(f"**{ex}:** {val['obtained']} / {val['max']}")
+                            else:
+                                st.write(f"**{ex}:** {val}")
             else:
                 st.info("No marks records.")
     else:
         st.warning("No data found for any semester.")
+
+elif (fetch_button or force_refresh_button) and not first_name_input:
+    st.sidebar.warning("Please enter a username to fetch data.")
