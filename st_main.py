@@ -365,12 +365,31 @@ if st.session_state.student_data_result:
             if marks_data:
                 for sub, exams in marks_data.items():
                     name = config.SUBJECT_CODE_TO_NAME_MAP.get(sub, sub)
+                    
+                    # Initialize totals for this subject
+                    sub_total_obt = 0
+                    sub_total_max = 0
+
                     with st.expander(f"{name}"):
                         for ex, val in exams.items():
                             if isinstance(val, dict):
-                                st.write(f"**{ex}:** {val['obtained']} / {val['max']}")
+                                o = val.get('obtained', 0)
+                                m = val.get('max', 0)
+                                
+                                # Display the individual exam line
+                                st.write(f"**{ex}:** {o} / {m}")
+                                
+                                # Add to running total
+                                sub_total_obt += float(o)
+                                sub_total_max += float(m)
                             else:
+                                # Fallback for old data formats
                                 st.write(f"**{ex}:** {val}")
+                        
+                        # Display the Total at the very end
+                        st.markdown("---") # A divider line for cleanliness
+                        st.markdown(f"**Total:** {sub_total_obt} / {sub_total_max}")
+
             else:
                 st.info("No marks records.")
     else:
