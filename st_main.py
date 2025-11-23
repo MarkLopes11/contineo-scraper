@@ -9,6 +9,7 @@ import pytz
 import math 
 import re 
 
+
 # --- Local Storage Setup ---
 try:
     _localS = LocalStorage()
@@ -25,6 +26,41 @@ load_dotenv()
 import config
 import db_utils
 import web_scraper
+
+# --- Email Function ---
+import resend
+
+def send_email_notification(user, message, rating):
+    api_key = os.getenv("RESEND_API_KEY")
+    receiver_email = os.getenv("EMAIL_RECEIVER")
+
+    if not api_key:
+        print("⚠️ Resend API Key missing in .env")
+        return
+
+    resend.api_key = api_key
+
+    html_content = f"""
+    <h3>🔔 New User Feedback</h3>
+    <p><strong>User:</strong> {user}</p>
+    <p><strong>Rating:</strong> {rating}/5 ⭐</p>
+    <p><strong>Message:</strong><br>{message}</p>
+    <hr>
+    <p><em>Sent from Student Portal App</em></p>
+    """
+
+    try:
+        # Note: 'onboarding@resend.dev' is the default free sender.
+        # If you have a custom domain verified on Resend, use that instead.
+        r = resend.Emails.send({
+            "from": "Student App <onboarding@resend.dev>",
+            "to": receiver_email,
+            "subject": f"New Feedback from {user} ({rating} Stars)",
+            "html": html_content
+        })
+        print(f"Email sent! ID: {r.get('id')}")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
 
 # --- Helper Functions ---
 
@@ -425,7 +461,6 @@ with st.expander("📝 Report a bug or leave a suggestion"):
         submitted_fb = st.form_submit_button("Submit Feedback")
 
         if submitted_fb:
-            # Calculate rating (index + 1). Default to 0 if they didn't click stars.
             final_rating = (selected_sentiment + 1) if selected_sentiment is not None else 0
             
             if final_rating == 0:
@@ -433,7 +468,12 @@ with st.expander("📝 Report a bug or leave a suggestion"):
             elif not fb_msg.strip():
                 st.warning("⚠️ Please write a message.")
             else:
+                # 1. Save to Database
                 if db_utils.save_feedback_pg(current_user, fb_msg, final_rating):
+                    
+                    # 2. Send Email Notification (Background check)
+                    send_email_notification(current_user, fb_msg, final_rating)
+                    
                     st.success("Thank you! Your feedback has been recorded. ❤️")
                     st.balloons()
                 else:
