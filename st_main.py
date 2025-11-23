@@ -1,3 +1,5 @@
+# app.py
+
 import streamlit as st
 import os
 from dotenv import load_dotenv
@@ -26,11 +28,13 @@ import web_scraper
 
 # --- Helper Functions ---
 
+def identify_semester(subject_code):
+    """Extracts semester from subject code (CSC701 -> 7)."""
+    match = re.search(r'\d', subject_code)
+    return int(match.group()) if match else 0
+
 def scrape_fresh_data(user_details):
-    """
-    Scrapes data and groups EVERYTHING under the current semester 
-    found on the welcome page (e.g., "SEM 07").
-    """
+    """Scrapes data and organizes it BY SEMESTER."""
     session, html = web_scraper.login_and_get_welcome_page(
         user_details["prn"], user_details["dob_day"], 
         user_details["dob_month"], user_details["dob_year"], 
@@ -38,29 +42,30 @@ def scrape_fresh_data(user_details):
     )
     if not html: return None
 
-    # 1. Scrape Raw Data
+    # Scrape Raw Data
     raw_marks = web_scraper.extract_cie_marks(session, html)
     raw_att = web_scraper.extract_detailed_attendance_info(session, html)
     
-    # 2. Extract Official Semester from Header (The Source of Truth)
-    current_sem_num = web_scraper.extract_student_semester(html)
-    
-    # Fallback if scraping fails (shouldn't happen if logged in properly)
-    if not current_sem_num:
-        current_sem_num = 0 
+    # Organize by Semester
+    # Structure: { 7: { 'cie': {...}, 'att': {...} }, 8: { ... } }
+    organized_data = {}
 
-    # 3. Organize Data by that single Semester
-    # We no longer guess semester per subject. All visible subjects belong to the current sem.
-    organized_data = {
-        current_sem_num: {
-            'cie': raw_marks,
-            'att': raw_att
-        }
-    }
+    # 1. Process Marks
+    for sub, exams in raw_marks.items():
+        sem = identify_semester(sub)
+        if sem == 0: continue
+        if sem not in organized_data: organized_data[sem] = {'cie': {}, 'att': {}}
+        organized_data[sem]['cie'][sub] = exams
+
+    # 2. Process Attendance
+    for sub, details in raw_att.items():
+        sem = identify_semester(sub)
+        if sem == 0: continue
+        if sem not in organized_data: organized_data[sem] = {'cie': {}, 'att': {}}
+        organized_data[sem]['att'][sub] = details
 
     return {
         "semesters_data": organized_data,
-        "latest_sem": current_sem_num,
         "scraped_at": datetime.now(pytz.utc)
     }
 
@@ -103,30 +108,83 @@ if first_name_input:
 col1, col2 = st.sidebar.columns(2)
 with col1:
     fetch_button = st.button("🔍 Fetch Data", type="primary", use_container_width=True)
+    st.caption("📂 **From DB**\n(Cached Data)")
 with col2:
     force_refresh_button = st.button("🔄 Get Live Data", use_container_width=True)
+    st.caption("🌐 **From Portal**\n(Current Data)")
 st.sidebar.markdown("---")
 
+# --- Add User Form (WITH VALIDATION) ---
 if st.sidebar.button("➕ Register New Student"):
     st.session_state.show_add_user_form = not st.session_state.show_add_user_form
 
 if st.session_state.show_add_user_form:
     with st.sidebar.expander("Add New Student Form", expanded=True):
         with st.form("new_user_form"):
-            new_first_name = st.text_input("Username:").strip()
-            new_full_name = st.text_input("Full Name:").strip()
+            st.markdown("##### Enter New Student Details:")
+            st.info("⚠️ Details must match the University Portal exactly.")
+            
+            new_first_name = st.text_input("App Username (e.g. 'gamer709'):").strip()
+            new_full_name = st.text_input("Full Name (as on Portal):").strip()
             new_prn = st.text_input("PRN:").strip()
-            new_dob_day = st.text_input("Day (DD):").strip()
-            new_dob_month = st.text_input("Month (MM):").strip()
-            new_dob_year = st.text_input("Year (YYYY):").strip()
-            if st.form_submit_button("Save"):
-                if db_utils.add_user_to_db_pg(new_first_name, new_full_name, new_prn, new_dob_day, new_dob_month, new_dob_year):
-                    st.success("Saved!")
-                    st.session_state.show_add_user_form = False
-                    st.rerun()
-                else:
-                    st.error("Failed to save. Username or PRN may already exist.")
+            
+            
+            new_dob_day = st.text_input("Date (DD)", max_chars=2).strip()
+            new_dob_month = st.text_input("Month (MM)", max_chars=2).strip()
+            new_dob_year = st.text_input("Year (YYYY)", max_chars=4).strip()
+            
+            submitted_add_user = st.form_submit_button("Validate & Save Student")
 
+            if submitted_add_user:
+                # 1. Local Validation: Check for empty fields
+                if not all([new_first_name, new_full_name, new_prn, new_dob_day, new_dob_month, new_dob_year]):
+                    st.error("❌ All fields are required.")
+                else:
+                    # 2. Remote Validation: Attempt to Log in to the Portal
+                    with st.spinner("🔐 Attempting login to University Portal..."):
+                        try:
+                            # Attempt login using the web_scraper module
+                            session, validation_html = web_scraper.login_and_get_welcome_page(
+                                new_prn, 
+                                new_dob_day, 
+                                new_dob_month, 
+                                new_dob_year, 
+                                new_full_name
+                            )
+                        except Exception as e:
+                            session, validation_html = None, None
+                            st.error(f"Connection Error: {e}")
+
+                    # 3. Verify Result
+                    if validation_html:
+                        st.success("✅ Credentials Validated Successfully!")
+                        
+                        # 4. Save to Database (Only happens if validation passed)
+                        save_success = db_utils.add_user_to_db_pg(
+                            new_first_name, 
+                            new_full_name, 
+                            new_prn, 
+                            new_dob_day, 
+                            new_dob_month, 
+                            new_dob_year
+                        )
+                        
+                        if save_success:
+                            st.balloons()
+                            st.success(f"👤 User '{new_first_name}' saved to database.")
+                            st.session_state.show_add_user_form = False
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Validation passed, but Username or PRN already exists in the database.")
+                    else:
+                        # 5. Validation Failed - Do NOT Save
+                        st.error("❌ Validation Failed.")
+                        st.markdown("""
+                        **Possible causes:**
+                        1. Incorrect PRN or Date of Birth.
+                        2. **Full Name** does not match the portal exactly (check spelling/spacing).
+                        3. Portal is currently down.
+                        """)
 # --- Fetch Logic ---
 should_fetch = (fetch_button or force_refresh_button or (first_name_input and not st.session_state.student_data_result))
 
@@ -158,6 +216,10 @@ if should_fetch and first_name_input:
                         db_utils.update_attendance_in_db_pg(
                             user_details["id"], sem, data['att']
                         )
+                    
+                    # Add latest_sem logic for display
+                    latest = max(result["semesters_data"].keys()) if result["semesters_data"] else None
+                    result["latest_sem"] = latest
 
         if result:
             st.session_state.student_data_result = {"user_details": user_details, "data_pkg": result, "source": source}
@@ -182,7 +244,8 @@ if st.session_state.student_data_result:
         else: st.success(f"🔄 Live: {ts}")
 
     all_sem_data = data.get("semesters_data", {})
-    
+    latest_sem = data.get("latest_sem")
+
     if all_sem_data:
         # Semester Selector
         sem_options = sorted(all_sem_data.keys(), reverse=True)
@@ -205,7 +268,6 @@ if st.session_state.student_data_result:
             for sub_code, exams in marks_data.items():
                 sub_name = config.SUBJECT_CODE_TO_NAME_MAP.get(sub_code, sub_code)
                 
-                # Determine Credits based on subject name (Theory vs Lab)
                 if "lab" in sub_name.lower(): cred = 1
                 elif "project" in sub_name.lower(): cred = 3
                 else: cred = 3

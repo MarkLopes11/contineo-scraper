@@ -119,6 +119,33 @@ def get_user_from_db_pg(first_name_query):
         cursor.close()
         conn.close()
 
+
+def get_all_users_from_db_pg():
+    conn = get_db_connection()
+    if not conn: return []
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT id, full_name, prn, dob_day, dob_month, dob_year
+            FROM users
+            ORDER BY id
+        ''')
+        rows = cursor.fetchall()
+        users = []
+        for row in rows:
+            users.append({
+                "id": row[0], "full_name": row[1], "prn": row[2],
+                "dob_day": row[3], "dob_month": row[4], "dob_year": row[5]
+            })
+        return users
+    except Exception as e:
+        print(f"Error fetching all users: {e}")
+        return []
+    finally:
+        cursor.close()
+        conn.close()
+
+        
 def update_student_marks_in_db_pg(user_id, semester, cie_marks_data, scraped_timestamp):
     """Saves Marks into the DB linked to a Semester."""
     if not cie_marks_data or not semester: return False

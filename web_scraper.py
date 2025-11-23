@@ -11,6 +11,7 @@ def login_and_get_welcome_page(prn, dob_day, dob_month_val, dob_year, user_full_
         "Referer": config.LOGIN_URL
     })
     try:
+        # 1. GET Login Page
         response_get = session.get(config.LOGIN_URL, timeout=20)
         response_get.raise_for_status()
         soup_login = BeautifulSoup(response_get.content, "html.parser")
@@ -18,6 +19,7 @@ def login_and_get_welcome_page(prn, dob_day, dob_month_val, dob_year, user_full_
         
         if not login_form: return None, None
 
+        # 2. Prepare Payload
         password_string_for_payload = f"{dob_year}-{str(dob_month_val).zfill(2)}-{str(dob_day).zfill(2)}"
         payload = {
             config.PRN_FIELD_NAME: prn,
@@ -27,6 +29,7 @@ def login_and_get_welcome_page(prn, dob_day, dob_month_val, dob_year, user_full_
             config.PASSWORD_FIELD_NAME: password_string_for_payload,
         }
 
+        # Add hidden inputs
         hidden_inputs = login_form.find_all("input", {"type": "hidden"})
         for hidden_input in hidden_inputs:
             name = hidden_input.get("name")
@@ -34,18 +37,52 @@ def login_and_get_welcome_page(prn, dob_day, dob_month_val, dob_year, user_full_
             if name and name not in payload:
                 payload[name] = value if value is not None else ""
 
+        # 3. POST Login
         form_action = login_form.get("action")
         actual_post_url = urljoin(config.LOGIN_URL, form_action) if form_action else config.FORM_ACTION_URL
         
         response_post = session.post(actual_post_url, data=payload, timeout=20)
         response_post.raise_for_status()
         welcome_page_html = response_post.text
+        lower_html = welcome_page_html.lower()
 
-        if user_full_name_for_check.lower() in welcome_page_html.lower() or "logout" in welcome_page_html.lower():
+        # --- 🔒 IMPROVED VALIDATION LOGIC ---
+
+        # A. Check for explicit FAILURE messages
+        # Most portals show these on the login screen if creds are wrong
+        failure_keywords = [
+            "invalid prn", "invalid password", "incorrect", 
+            "user not found", "login failed", "try again"
+        ]
+        if any(fail_msg in lower_html for fail_msg in failure_keywords):
+            return None, None
+
+        # B. Check for explicit SUCCESS indicators
+        # We look for elements that ONLY exist on the Dashboard, not the Login page.
+        soup_dash = BeautifulSoup(welcome_page_html, "html.parser")
+        
+        # 1. Name Match (If provided)
+        name_matched = user_full_name_for_check.lower() in lower_html if user_full_name_for_check else False
+        
+        # 2. Dashboard Specifics (e.g., "Course", "Semester", specific IDs)
+        # "cie-table" or "attendance" are good indicators of the student portal
+        has_dashboard_elements = (
+            "course" in lower_html and 
+            ("attendance" in lower_html or "semester" in lower_html)
+        )
+
+        # 3. Strict "Logout" Link Check (Must be an actual link, not just text)
+        has_logout_link = soup_dash.find("a", href=True, string=re.compile(r"logout", re.IGNORECASE))
+
+        # Final Decision:
+        # Must NOT have failure keywords AND (Name matches OR definitely looks like dashboard)
+        if name_matched or (has_dashboard_elements and has_logout_link):
             return session, welcome_page_html
         else:
             return None, None
-    except Exception:
+
+    except Exception as e:
+        print(f"Scraper Error: {e}")
         return None, None
 
 def extract_attendance_from_welcome_page(welcome_page_html):
