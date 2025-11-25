@@ -381,7 +381,10 @@ if st.session_state.student_data_result:
             if att_data:
                 att_display = []
                 for sub, det in att_data.items():
-                    name = config.SUBJECT_CODE_TO_NAME_MAP.get(sub, sub)
+                    # --- Formatting: Name (Code) ---
+                    subject_name = config.SUBJECT_CODE_TO_NAME_MAP.get(sub, sub)
+                    display_name = f"{subject_name} ({sub})"
+                    
                     att = det.get('attended', 0)
                     cond = det.get('conducted', 0)
                     
@@ -395,7 +398,7 @@ if st.session_state.student_data_result:
                             need = math.ceil(((0.75*cond) - att)/0.25)
                             status = f"⚠️ Low. Attend {int(need)}"
                         
-                        att_display.append({"Subject": name, "%": f"{p:.1f}", "Status": status})
+                        att_display.append({"Subject": display_name, "Attendance": f"{p:.1f}%", "Status(For 75%)": status})
                 st.dataframe(att_display, use_container_width=True, hide_index=True)
             else:
                 st.info("No attendance records.")
@@ -404,13 +407,15 @@ if st.session_state.student_data_result:
             st.subheader("📝 Marks")
             if marks_data:
                 for sub, exams in marks_data.items():
-                    name = config.SUBJECT_CODE_TO_NAME_MAP.get(sub, sub)
+                    # --- Formatting: Name (Code) ---
+                    subject_name = config.SUBJECT_CODE_TO_NAME_MAP.get(sub, sub)
+                    display_name = f"{subject_name} ({sub})"
                     
                     # Initialize totals for this subject
                     sub_total_obt = 0
                     sub_total_max = 0
 
-                    with st.expander(f"{name}"):
+                    with st.expander(f"{display_name}"):
                         for ex, val in exams.items():
                             if isinstance(val, dict):
                                 o = val.get('obtained', 0)
@@ -427,7 +432,7 @@ if st.session_state.student_data_result:
                                 st.write(f"**{ex}:** {val}")
                         
                         # Display the Total at the very end
-                        st.markdown("---") # A divider line for cleanliness
+                        st.markdown("---") 
                         st.markdown(f"**Total:** {sub_total_obt} / {sub_total_max}")
 
             else:
