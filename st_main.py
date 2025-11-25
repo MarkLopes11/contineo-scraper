@@ -70,7 +70,9 @@ def identify_semester(subject_code):
     return int(match.group()) if match else 0
 
 def scrape_fresh_data(user_details):
-    """Scrapes data and organizes it BY SEMESTER."""
+    """Scrapes data and organizes it using the Semester found on the Welcome Page."""
+    
+    # 1. Login and get the Dashboard HTML
     session, html = web_scraper.login_and_get_welcome_page(
         user_details["prn"], user_details["dob_day"], 
         user_details["dob_month"], user_details["dob_year"], 
@@ -78,27 +80,26 @@ def scrape_fresh_data(user_details):
     )
     if not html: return None
 
-    # Scrape Raw Data
+    # 2. Extract the Semester directly from the Welcome Page HTML
+    # (Make sure extract_student_semester is in your web_scraper.py)
+    current_sem = web_scraper.extract_student_semester(html)
+
+    # Fallback: If the HTML scraper fails to find "SEM X", default to 0 or try to guess
+    if not current_sem:
+        current_sem = 0 
+
+    # 3. Scrape Raw Data
     raw_marks = web_scraper.extract_cie_marks(session, html)
     raw_att = web_scraper.extract_detailed_attendance_info(session, html)
     
-    # Organize by Semester
-    # Structure: { 7: { 'cie': {...}, 'att': {...} }, 8: { ... } }
-    organized_data = {}
-
-    # 1. Process Marks
-    for sub, exams in raw_marks.items():
-        sem = identify_semester(sub)
-        if sem == 0: continue
-        if sem not in organized_data: organized_data[sem] = {'cie': {}, 'att': {}}
-        organized_data[sem]['cie'][sub] = exams
-
-    # 2. Process Attendance
-    for sub, details in raw_att.items():
-        sem = identify_semester(sub)
-        if sem == 0: continue
-        if sem not in organized_data: organized_data[sem] = {'cie': {}, 'att': {}}
-        organized_data[sem]['att'][sub] = details
+    # 4. Organize Data
+    # We now use 'current_sem' for ALL subjects found in this session
+    organized_data = {
+        current_sem: {
+            'cie': raw_marks, # All marks belong to this semester
+            'att': raw_att    # All attendance belongs to this semester
+        }
+    }
 
     return {
         "semesters_data": organized_data,
