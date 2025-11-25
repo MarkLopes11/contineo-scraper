@@ -30,35 +30,37 @@ import web_scraper
 # --- Email Function ---
 import resend
 
-def send_email_notification(user, message, rating):
+def send_email_notification(user, user_email, message, rating): # <--- Added user_email param
     api_key = os.getenv("RESEND_API_KEY")
-    receiver_email = os.getenv("EMAIL_RECEIVER")
+    receiver_email = os.getenv("EMAIL_RECEIVER") # Your personal email
 
     if not api_key:
-        print("⚠️ Resend API Key missing in .env")
         return
 
     resend.api_key = api_key
 
+    # If user didn't provide email, reply-to defaults to your own email (so you don't lose the thread)
+    reply_to_address = user_email if user_email else receiver_email
+
     html_content = f"""
     <h3>🔔 New User Feedback</h3>
     <p><strong>User:</strong> {user}</p>
+    <p><strong>Email:</strong> {user_email if user_email else "Not provided"}</p>
     <p><strong>Rating:</strong> {rating}/5 ⭐</p>
     <p><strong>Message:</strong><br>{message}</p>
     <hr>
-    <p><em>Sent from Student Portal App</em></p>
+    <p><em>To reply to the student, simply click "Reply" in your email client.</em></p>
     """
 
     try:
-        # Note: 'onboarding@resend.dev' is the default free sender.
-        # If you have a custom domain verified on Resend, use that instead.
-        r = resend.Emails.send({
+        resend.Emails.send({
             "from": "Student App <onboarding@resend.dev>",
             "to": receiver_email,
+            "reply_to": reply_to_address,  # <--- THIS IS THE MAGIC LINE
             "subject": f"New Feedback from {user} ({rating} Stars)",
             "html": html_content
         })
-        print(f"Email sent! ID: {r.get('id')}")
+        print("Email sent!")
     except Exception as e:
         print(f"Failed to send email: {e}")
 
@@ -438,9 +440,6 @@ elif (fetch_button or force_refresh_button) and not first_name_input:
 
 
 # --- Append this to the very end of app.py ---
-
-# --- Append this to the very end of app.py ---
-
 st.divider()
 st.subheader("💬 Feedback & Support")
 
@@ -452,11 +451,11 @@ with st.expander("📝 Report a bug or leave a suggestion"):
         
         with c1:
             st.write("**Rate your experience:**")
-            # st.feedback returns 0 for 1 star, 4 for 5 stars. Returns None if untouched.
-            sentiment_mapping = ["1", "2", "3", "4", "5"]
             selected_sentiment = st.feedback("stars")
             
         with c2:
+            # New Email Input
+            fb_email = st.text_input("Your Email:")
             fb_msg = st.text_area("Message", placeholder="Tell us what you think...")
 
         submitted_fb = st.form_submit_button("Submit Feedback")
@@ -469,11 +468,11 @@ with st.expander("📝 Report a bug or leave a suggestion"):
             elif not fb_msg.strip():
                 st.warning("⚠️ Please write a message.")
             else:
-                # 1. Save to Database
-                if db_utils.save_feedback_pg(current_user, fb_msg, final_rating):
+                # 1. Save to Database (Pass email now)
+                if db_utils.save_feedback_pg(current_user, fb_email, fb_msg, final_rating):
                     
-                    # 2. Send Email Notification (Background check)
-                    send_email_notification(current_user, fb_msg, final_rating)
+                    # 2. Send Email Notification (Pass email now)
+                    send_email_notification(current_user, fb_email, fb_msg, final_rating)
                     
                     st.success("Thank you! Your feedback has been recorded. ❤️")
                     st.balloons()
