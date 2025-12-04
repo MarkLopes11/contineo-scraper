@@ -29,9 +29,8 @@ This dashboard solves these problems by providing:
 
 ## 📸 Demo
 
-*(It's highly recommended to add a screenshot of your running application here!)*
+<img width="1820" height="825" alt="image" src="https://github.com/user-attachments/assets/5d9dedcf-e3e6-42f6-946a-b074009041e6" />
 
-![App Screenshot](path/to/your/screenshot.png)
 
 ## 🛠️ Tech Stack
 
@@ -46,8 +45,8 @@ To run this project on your local machine, follow these steps:
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/your-repo-name.git
-    cd your-repo-name
+    git clone https://github.com/MarkLopes11/Contineo.git
+    cd Contineo
     ```
 
 2.  **Create a virtual environment and activate it:**
