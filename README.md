@@ -84,7 +84,7 @@ To run this project on your local machine, follow these steps:
   
 6.  **Run the Streamlit app:**
     ```bash
-    streamlit run app.py
+    streamlit run st_main.py
     ```
 
 ## 📖 How to Use the App
