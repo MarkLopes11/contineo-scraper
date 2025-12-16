@@ -75,8 +75,11 @@ SUBJECT_CODE_TO_NAME_MAP = {
     "25AEC12CE021" : "Sanskrit",
     "25MDMBM1" : "Financial Accounting",
     "25OE13CE12" : "Financial Planning Taxation And Investment",
-    "25MDMBM2" : "Economics For Businees"
-
+    "25MDMBM2" : "Economics For Businees",
+    "CSDC8013" : "ADS",
+    "CSDC8023" : "SMA",
+    "CSC801" : "DC",
+    "CSDL8013" : "ADS Lab"
 }
 
 MAX_MARKS_CONFIG = {
