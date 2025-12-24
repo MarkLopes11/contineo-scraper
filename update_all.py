@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import math
 import re
 
-# Load environment variables from .env file FIRST
+# Load environment variables
 load_dotenv()
 
 import db_utils
@@ -18,6 +18,16 @@ import config
 DELAY_BETWEEN_REQUESTS = 5  # Seconds to wait between students
 
 # --- Helper Functions ---
+
+def identify_target_semester(sub_code, default_sem):
+    """
+    Logic: Use dashboard sem as default. 
+    Force to 8 if code starts with CSC8, CSDC8, or CSDL8.
+    """
+    code = sub_code.strip().upper()
+    if re.search(r"^(CSC|CSDC|CSDL)8", code):
+        return 8
+    return default_sem
 
 def calculate_grade_point(percentage):
     """Maps percentage to Grade Point (GP)."""
@@ -32,7 +42,7 @@ def calculate_grade_point(percentage):
 
 def run_update():
     print("="*60)
-    print("🚀 Starting BATCH UPDATE: Marks, Attendance & SGPI")
+    print("🚀 Starting BATCH UPDATE: Hybrid Sem 7/8 Logic")
     print("="*60)
 
     all_users = db_utils.get_all_users_from_db_pg()
@@ -57,7 +67,6 @@ def run_update():
 
         try:
             # 1. Login
-            print("   🔑 Logging in...")
             session, html = web_scraper.login_and_get_welcome_page(
                 prn, user['dob_day'], user['dob_month'], user['dob_year'], full_name
             )
@@ -65,104 +74,102 @@ def run_update():
             if not html:
                 print(f"   ❌ Login FAILED. Skipping.")
                 fail_count += 1
-                time.sleep(DELAY_BETWEEN_REQUESTS)
                 continue
 
-            # 2. Scrape Data
-            print("   ⬇️  Scraping Marks and Attendance...")
+            # 2. Scrape Mixed Raw Data
+            raw_marks = web_scraper.extract_cie_marks(session, html)
+            raw_att = web_scraper.extract_detailed_attendance_info(session, html)
+            dashboard_sem = web_scraper.extract_student_semester(html) or 0
             
-            # Pass session for deep scraping
-            cie_marks = web_scraper.extract_cie_marks(session, html)
-            attendance = web_scraper.extract_detailed_attendance_info(session, html)
-            current_sem = web_scraper.extract_student_semester(html)
+            # 3. Organize into Buckets (Hybrid Logic)
+            # Structure: { 7: {'cie': {}, 'att': {}}, 8: {...} }
+            organized_data = {}
 
-            if not current_sem:
-                print("   ⚠️  Could not determine Semester. Defaulting to 0.")
-                current_sem = 0
+            # Sort Marks
+            for sub, exams in raw_marks.items():
+                sem = identify_target_semester(sub, dashboard_sem)
+                if sem not in organized_data: organized_data[sem] = {'cie': {}, 'att': {}}
+                organized_data[sem]['cie'][sub] = exams
 
-            if not cie_marks:
-                print("   ⚠️  No Marks found (User might be new or portal issue).")
-            
+            # Sort Attendance
+            for sub, details in raw_att.items():
+                sem = identify_target_semester(sub, dashboard_sem)
+                if sem not in organized_data: organized_data[sem] = {'cie': {}, 'att': {}}
+                organized_data[sem]['att'][sub] = details
+
             timestamp = datetime.now(pytz.utc)
 
-            # 3. Update Database (Marks & Attendance)
-            print(f"   💾 Saving data for Semester {current_sem}...")
-            
-            if cie_marks:
-                db_utils.update_student_marks_in_db_pg(user_id, current_sem, cie_marks, timestamp)
-            
-            if attendance:
-                db_utils.update_attendance_in_db_pg(user_id, current_sem, attendance)
+            # 4. Process each semester found
+            for sem, data in organized_data.items():
+                print(f"   💾 Updating Semester {sem}...")
+                
+                # Save Marks & Attendance to DB
+                if data['cie']:
+                    db_utils.update_student_marks_in_db_pg(user_id, sem, data['cie'], timestamp)
+                if data['att']:
+                    db_utils.update_attendance_in_db_pg(user_id, sem, data['att'])
 
-            # 4. Calculate SGPI
-            if cie_marks:
-                print("   🧮 Calculating SGPI...")
-                total_credits = 0
-                weighted_gp = 0
-                db_grade_details = []
+                # 5. Calculate SGPI for this specific semester bucket
+                if data['cie']:
+                    total_credits = 0
+                    weighted_gp = 0
+                    db_grade_details = []
 
-                for sub_code, exams in cie_marks.items():
-                    sub_name = config.SUBJECT_CODE_TO_NAME_MAP.get(sub_code, sub_code)
-                    
-                    # Credit Logic
-                    if "lab" in sub_name.lower(): credits = 1
-                    elif "project" in sub_name.lower(): credits = 3
-                    else: credits = 3
-
-                    obt_sum = 0.0
-                    max_sum = 0.0
-                    
-                    for ex, val in exams.items():
-                        o = val.get('obtained', 0)
-                        m = val.get('max', 0)
-                        if isinstance(o, (int, float)):
-                            obt_sum += o
-                            max_sum += m if m > 0 else config.get_max_marks(sub_code, ex)
-
-                    if max_sum > 0:
-                        perc = (obt_sum / max_sum) * 100
-                        rnd_perc = math.floor(perc + 0.5) # Round UP logic
-                        gp = calculate_grade_point(rnd_perc)
+                    for sub_code, exams in data['cie'].items():
+                        sub_name = config.SUBJECT_CODE_TO_NAME_MAP.get(sub_code, sub_code)
                         
-                        weighted_gp += (credits * gp)
-                        total_credits += credits
-                        
-                        grade = "F"
-                        if gp == 10: grade = "O"
-                        elif gp == 9: grade = "A"
-                        elif gp == 8: grade = "B"
-                        elif gp == 7: grade = "C"
-                        elif gp == 6: grade = "D"
-                        elif gp == 5: grade = "E"
-                        elif gp == 4: grade = "P"
+                        # Credits: Lab=1, Project=3, Theory=3
+                        if "lab" in sub_name.lower(): cred = 1
+                        elif "project" in sub_name.lower(): cred = 3
+                        else: cred = 3
 
-                        db_grade_details.append({
-                            "subject_code": sub_code,
-                            "subject_name": sub_name,
-                            "percentage": float(f"{perc:.2f}"),
-                            "grade_point": gp,
-                            "grade_letter": grade,
-                            "credits": credits
-                        })
+                        obt_sum = 0.0
+                        max_sum = 0.0
+                        for ex, val in exams.items():
+                            o = val.get('obtained', 0)
+                            m = val.get('max', 0)
+                            if isinstance(o, (int, float)):
+                                obt_sum += o
+                                max_sum += m if m > 0 else config.get_max_marks(sub_code, ex)
 
-                # 5. Save SGPI to DB
-                if total_credits > 0:
-                    sgpi = weighted_gp / total_credits
-                    db_utils.save_student_sgpi_pg(user_id, current_sem, sgpi, db_grade_details)
-                    print(f"      ✅ Saved SGPI: {sgpi:.2f}")
-                else:
-                    print(f"      ⚠️  No credits found for SGPI calculation.")
+                        if max_sum > 0:
+                            perc = (obt_sum / max_sum) * 100
+                            rnd_perc = math.floor(perc + 0.5)
+                            gp = calculate_grade_point(rnd_perc)
+                            
+                            weighted_gp += (cred * gp)
+                            total_credits += cred
+                            
+                            # Letter Grades
+                            grade = "F"
+                            if gp == 10: grade = "O"
+                            elif gp == 9: grade = "A"
+                            elif gp == 8: grade = "B"
+                            elif gp == 7: grade = "C"
+                            elif gp == 6: grade = "D"
+                            elif gp == 5: grade = "E"
+                            elif gp == 4: grade = "P"
 
-            print(f"   ✅ User updated successfully.")
+                            db_grade_details.append({
+                                "subject_code": sub_code, "subject_name": sub_name,
+                                "percentage": float(f"{perc:.2f}"), "grade_point": gp, 
+                                "grade_letter": grade, "credits": cred
+                            })
+
+                    if total_credits > 0:
+                        sgpi = weighted_gp / total_credits
+                        db_utils.save_student_sgpi_pg(user_id, sem, sgpi, db_grade_details)
+                        print(f"      ✅ Saved SGPI: {sgpi:.2f}")
+
+            print(f"   ✅ {full_name} updated successfully.")
             success_count += 1
 
         except Exception as e:
             print(f"   🚨 Error processing {full_name}: {e}")
             fail_count += 1
         
-        # Wait before next
+        # Rate Limiting
         if i + 1 < total_users:
-            print(f"   zzz Sleeping for {DELAY_BETWEEN_REQUESTS}s...")
             time.sleep(DELAY_BETWEEN_REQUESTS)
 
     print("\n" + "="*60)

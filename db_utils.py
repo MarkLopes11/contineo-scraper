@@ -147,17 +147,23 @@ def get_all_users_from_db_pg():
 
         
 def update_student_marks_in_db_pg(user_id, semester, cie_marks_data, scraped_timestamp):
-    """Saves Marks into the DB linked to a Semester."""
-    if not cie_marks_data or not semester: return False
+    """Saves Marks into the DB linked to a Semester with safety checks for connection drops."""
+    if not cie_marks_data or not semester: 
+        return False
+        
     conn = get_db_connection()
-    if not conn: return False
+    if not conn: 
+        return False
+        
     cursor = conn.cursor()
     try:
         records = []
         for sub, exams in cie_marks_data.items():
             for exam, val in exams.items():
+                # Handle cases where val might be a dict or a raw number
                 obt = val.get('obtained') if isinstance(val, dict) else val
                 mx = val.get('max', 0) if isinstance(val, dict) else 0
+                
                 if isinstance(obt, (int, float)):
                     records.append((user_id, semester, sub, exam, obt, mx, scraped_timestamp))
         
@@ -166,17 +172,35 @@ def update_student_marks_in_db_pg(user_id, semester, cie_marks_data, scraped_tim
                 INSERT INTO cie_marks (user_id, semester, subject_code, exam_type, marks, max_marks, scraped_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (user_id, subject_code, exam_type) 
-                DO UPDATE SET marks = EXCLUDED.marks, max_marks = EXCLUDED.max_marks, scraped_at = EXCLUDED.scraped_at, semester = EXCLUDED.semester;
+                DO UPDATE SET 
+                    marks = EXCLUDED.marks, 
+                    max_marks = EXCLUDED.max_marks, 
+                    scraped_at = EXCLUDED.scraped_at, 
+                    semester = EXCLUDED.semester;
             """, records)
+            
         conn.commit()
         return True
+
     except Exception as e:
         print(f"Error updating marks: {e}")
-        conn.rollback()
+        # SAFETY: Only rollback if the connection is still alive
+        try:
+            if conn and not conn.closed:
+                conn.rollback()
+        except:
+            pass # Connection already dead, cannot rollback
         return False
+
     finally:
-        cursor.close()
-        conn.close()
+        # SAFETY: Ensure cursor and connection are closed properly without crashing
+        try:
+            if cursor:
+                cursor.close()
+            if conn and not conn.closed:
+                conn.close()
+        except:
+            pass
 
 def update_attendance_in_db_pg(user_id, semester, attendance_data):
     """Saves Attendance to the DB linked to a Semester."""

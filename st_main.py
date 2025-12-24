@@ -72,7 +72,11 @@ def identify_semester(subject_code):
     return int(match.group()) if match else 0
 
 def scrape_fresh_data(user_details):
-    """Scrapes data and organizes it using the Semester found on the Welcome Page."""
+    """
+    Scrapes data and organizes it.
+    - Default: Uses the Semester found on the Welcome Page (e.g., 7).
+    - Exception: Moves 'CSC8...', 'CSDC8...', 'CSDL8...' subjects to Semester 8.
+    """
     
     # 1. Login and get the Dashboard HTML
     session, html = web_scraper.login_and_get_welcome_page(
@@ -82,26 +86,48 @@ def scrape_fresh_data(user_details):
     )
     if not html: return None
 
-    # 2. Extract the Semester directly from the Welcome Page HTML
-    # (Make sure extract_student_semester is in your web_scraper.py)
-    current_sem = web_scraper.extract_student_semester(html)
-
-    # Fallback: If the HTML scraper fails to find "SEM X", default to 0 or try to guess
-    if not current_sem:
-        current_sem = 0 
+    # 2. Extract the Default Semester from the Dashboard
+    dashboard_sem = web_scraper.extract_student_semester(html)
+    if not dashboard_sem: 
+        dashboard_sem = 0 
 
     # 3. Scrape Raw Data
     raw_marks = web_scraper.extract_cie_marks(session, html)
     raw_att = web_scraper.extract_detailed_attendance_info(session, html)
     
-    # 4. Organize Data
-    # We now use 'current_sem' for ALL subjects found in this session
-    organized_data = {
-        current_sem: {
-            'cie': raw_marks, # All marks belong to this semester
-            'att': raw_att    # All attendance belongs to this semester
-        }
-    }
+    # 4. Organize Data (Hybrid Logic)
+    organized_data = {}
+
+    def get_sem_for_subject(sub_code, default_sem):
+        """Checks if subject is explicitly Sem 8, otherwise returns default."""
+        code = sub_code.strip().upper()
+        
+        # RULE: If code starts with CSC8, CSDC8, or CSDL8 -> Force Sem 8
+        if re.search(r"^(CSC|CSDC|CSDL)8", code):
+            return 8
+        
+        # Otherwise, stick to what the dashboard says (e.g., Sem 7)
+        return default_sem
+
+    # --- Process Marks ---
+    for sub, exams in raw_marks.items():
+        sem = get_sem_for_subject(sub, dashboard_sem)
+        
+        if sem == 0: continue # Skip if invalid
+
+        if sem not in organized_data: 
+            organized_data[sem] = {'cie': {}, 'att': {}}
+        organized_data[sem]['cie'][sub] = exams
+
+    # --- Process Attendance ---
+    for sub, details in raw_att.items():
+        sem = get_sem_for_subject(sub, dashboard_sem)
+        
+        if sem == 0: continue
+
+        if sem not in organized_data: 
+            organized_data[sem] = {'cie': {}, 'att': {}}
+        organized_data[sem]['att'][sub] = details
 
     return {
         "semesters_data": organized_data,
