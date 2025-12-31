@@ -153,11 +153,12 @@ if 'db_initialized' not in st.session_state:
 st.set_page_config(page_title="Student Portal Viewer", layout="wide")
 st.header("🎓 Student Portal Data Viewer")
 
+
 # Injecting the PWA links pointing to your local static folder
 st.markdown(
     """
     <link rel="manifest" href="/app/static/manifest.json">
-    <link rel="apple-touch-icon" href="/app/static/icon-192.png">
+    <link rel="apple-touch-icon" href="/app/static/contineo.png">
     <meta name="theme-color" content="#0e1117">
     """,
     unsafe_allow_html=True
