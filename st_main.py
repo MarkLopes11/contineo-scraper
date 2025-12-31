@@ -153,6 +153,22 @@ if 'db_initialized' not in st.session_state:
 st.set_page_config(page_title="Student Portal Viewer", layout="wide")
 st.header("🎓 Student Portal Data Viewer")
 
+# --- PWA Customization ---
+st.markdown(
+    """
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0e1117">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3135/3135810.png">
+    <style>
+        /* This hides the "made with streamlit" footer to make it feel more like a native app */
+        footer {visibility: hidden;}
+        #MainMenu {visibility: hidden;}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # --- Sidebar ---
 if 'first_name' not in st.session_state:
     st.session_state.first_name = get_item(key="last_username") or ""
@@ -173,10 +189,10 @@ if first_name_input:
 
 col1, col2 = st.sidebar.columns(2)
 with col1:
-    fetch_button = st.button("🔍 Fetch Data", type="primary", use_container_width=True)
+    fetch_button = st.button("🔍 Fetch Data", type="primary", width='stretch')
     st.caption("📂 **From DB**\n(Cached Data)")
 with col2:
-    force_refresh_button = st.button("🔄 Get Live Data", use_container_width=True)
+    force_refresh_button = st.button("🔄 Get Live Data", width='stretch')
     st.caption("🌐 **From Portal**\n(Current Data)")
 st.sidebar.markdown("---")
 
@@ -425,7 +441,7 @@ if st.session_state.student_data_result:
                             status = f"⚠️ Low. Attend {int(need)}"
                         
                         att_display.append({"Subject": display_name, "Attendance": f"{p:.1f}%", "Status(For 75%)": status})
-                st.dataframe(att_display, use_container_width=True, hide_index=True)
+                st.dataframe(att_display, width='stretch', hide_index=True)
             else:
                 st.info("No attendance records.")
 
