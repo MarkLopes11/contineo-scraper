@@ -150,7 +150,7 @@ if 'db_initialized' not in st.session_state:
     db_utils.create_feedback_table_pg()
     st.session_state.db_initialized = True
 
-st.set_page_config(page_title="Student Portal Viewer", layout="wide")
+st.set_page_config(page_title="Student Portal Viewer",page_icon="static/contineo.png", layout="wide")
 st.header("🎓 Student Portal Data Viewer")
 
 
