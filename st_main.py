@@ -153,18 +153,12 @@ if 'db_initialized' not in st.session_state:
 st.set_page_config(page_title="Student Portal Viewer", layout="wide")
 st.header("🎓 Student Portal Data Viewer")
 
-# --- PWA Customization ---
+# Injecting the PWA links pointing to your local static folder
 st.markdown(
     """
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/app/static/manifest.json">
+    <link rel="apple-touch-icon" href="/app/static/icon-192.png">
     <meta name="theme-color" content="#0e1117">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3135/3135810.png">
-    <style>
-        /* This hides the "made with streamlit" footer to make it feel more like a native app */
-        footer {visibility: hidden;}
-        #MainMenu {visibility: hidden;}
-    </style>
     """,
     unsafe_allow_html=True
 )

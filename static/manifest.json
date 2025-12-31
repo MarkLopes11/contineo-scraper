@@ -1,0 +1,16 @@
+{
+  "short_name": "Contineo",
+  "name": "Contineo Student Portal",
+  "icons": [
+    {
+      "src": "/contineo.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0e1117",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#0e1117"
+}
