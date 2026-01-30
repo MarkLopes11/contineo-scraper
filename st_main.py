@@ -103,7 +103,7 @@ def scrape_fresh_data(user_details):
         code = sub_code.strip().upper()
         
         # RULE: If code starts with CSC8, CSDC8, or CSDL8 -> Force Sem 8
-        if re.search(r"^(CSC|CSDC|CSDL)8", code):
+        if re.search(r"^(CSC|CSDC|CSDL|CSL)8", code):
             return 8
         
         # Otherwise, stick to what the dashboard says (e.g., Sem 7)
@@ -192,7 +192,7 @@ if st.session_state.show_add_user_form:
             
             new_first_name = st.text_input("App Username (e.g. 'gamer709'):").strip()
             new_full_name = st.text_input("Full Name (as on Portal):").strip()
-            new_prn = st.text_input("PRN:").strip()
+            new_prn = st.text_input("PRN(Or Roll no if you use that):").strip()
             
             
             new_dob_day = st.text_input("Date (DD)", max_chars=2).strip()

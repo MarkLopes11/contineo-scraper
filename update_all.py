@@ -25,7 +25,7 @@ def identify_target_semester(sub_code, default_sem):
     Force to 8 if code starts with CSC8, CSDC8, or CSDL8.
     """
     code = sub_code.strip().upper()
-    if re.search(r"^(CSC|CSDC|CSDL)8", code):
+    if re.search(r"^(CSC|CSDC|CSDL|CSL)8", code):
         return 8
     return default_sem
 

@@ -79,7 +79,8 @@ SUBJECT_CODE_TO_NAME_MAP = {
     "CSDC8013" : "ADS",
     "CSDC8023" : "SMA",
     "CSC801" : "DC",
-    "CSDL8013" : "ADS Lab"
+    "CSDL8013" : "ADS Lab",
+    "CSL801" : "DC Lab"
 }
 
 MAX_MARKS_CONFIG = {
