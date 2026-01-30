@@ -150,8 +150,19 @@ if 'db_initialized' not in st.session_state:
     db_utils.create_feedback_table_pg()
     st.session_state.db_initialized = True
 
-st.set_page_config(page_title="Student Portal Viewer", layout="wide")
+st.set_page_config(page_title="Student Portal Viewer",page_icon="static/contineo.png", layout="wide")
 st.header("🎓 Student Portal Data Viewer")
+
+
+# Injecting the PWA links pointing to your local static folder
+st.markdown(
+    """
+    <link rel="manifest" href="/app/static/manifest.json">
+    <link rel="apple-touch-icon" href="/app/static/contineo.png">
+    <meta name="theme-color" content="#0e1117">
+    """,
+    unsafe_allow_html=True
+)
 
 # --- Sidebar ---
 if 'first_name' not in st.session_state:
@@ -173,10 +184,10 @@ if first_name_input:
 
 col1, col2 = st.sidebar.columns(2)
 with col1:
-    fetch_button = st.button("🔍 Fetch Data", type="primary", use_container_width=True)
+    fetch_button = st.button("🔍 Fetch Data", type="primary", width='stretch')
     st.caption("📂 **From DB**\n(Cached Data)")
 with col2:
-    force_refresh_button = st.button("🔄 Get Live Data", use_container_width=True)
+    force_refresh_button = st.button("🔄 Get Live Data", width='stretch')
     st.caption("🌐 **From Portal**\n(Current Data)")
 st.sidebar.markdown("---")
 
@@ -425,7 +436,7 @@ if st.session_state.student_data_result:
                             status = f"⚠️ Low. Attend {int(need)}"
                         
                         att_display.append({"Subject": display_name, "Attendance": f"{p:.1f}%", "Status(For 75%)": status})
-                st.dataframe(att_display, use_container_width=True, hide_index=True)
+                st.dataframe(att_display, width='stretch', hide_index=True)
             else:
                 st.info("No attendance records.")
 
